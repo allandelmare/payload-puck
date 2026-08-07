@@ -110,14 +110,17 @@
     "build:types": "tsc --outDir dist",
     "copyfiles": "copyfiles -u 1 \"src/**/*.css\" dist",
     "dev": "pnpm generate-version && swc ./src -d ./dist --strip-leading-paths --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
     "@payloadcms/next": ">=3.69.0",
     "@payloadcms/ui": ">=3.69.0",
-    "@puckeditor/core": ">=0.21.0",
+    "@puckeditor/core": ">=0.23.0",
     "@tailwindcss/postcss": ">=4.0.0",
     "next": ">=15.4.8",
     "payload": ">=3.69.0",
@@ -152,9 +155,9 @@
     }
   },
   "dependencies": {
-    "@puckeditor/cloud-client": "^0.7.0",
-    "@puckeditor/plugin-ai": "^0.7.0",
-    "@puckeditor/plugin-heading-analyzer": "^0.21.2",
+    "@puckeditor/cloud-client": "^0.8.2",
+    "@puckeditor/plugin-ai": "^0.8.2",
+    "@puckeditor/plugin-heading-analyzer": "^0.23.0",
     "@radix-ui/react-popover": "^1.1.15",
     "@tiptap/core": "^3.20.1",
     "@tiptap/extension-color": "^3.20.1",
@@ -171,20 +174,22 @@
     "lucide-react": "^0.469.0"
   },
   "devDependencies": {
-    "@payloadcms/next": "^3.84.1",
-    "@payloadcms/ui": "^3.84.1",
-    "@puckeditor/core": "^0.22.0",
+    "@payloadcms/next": "^3.87.1",
+    "@payloadcms/ui": "^3.87.1",
+    "@puckeditor/core": "^0.23.0",
     "@swc/cli": "^0.6.0",
     "@swc/core": "^1.15.18",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^3.2.7",
     "copyfiles": "^2.4.1",
-    "next": "^16.2.6",
-    "payload": "^3.84.1",
+    "next": "^16.3.0",
+    "payload": "^3.87.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   },
   "keywords": [
     "payload",
@@ -196,7 +201,7 @@
     "cms"
   ],
   "engines": {
-    "node": "^18.20.2 || >=20.9.0"
+    "node": ">=20.9.0"
   },
   "author": "Delmare Digital",
   "repository": {

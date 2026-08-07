@@ -1,0 +1,35 @@
+version: 2
+
+updates:
+  # Runtime + dev dependencies. Grouped so a routine refresh is one reviewable PR
+  # per ecosystem area instead of a dozen near-identical bumps.
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      puck:
+        patterns:
+          - '@puckeditor/*'
+      tiptap:
+        patterns:
+          - '@tiptap/*'
+      payload:
+        patterns:
+          - 'payload'
+          - '@payloadcms/*'
+      dev-tooling:
+        patterns:
+          - '@swc/*'
+          - '@types/*'
+          - 'typescript'
+          - 'vitest'
+          - '@vitest/*'
+          - 'copyfiles'
+
+  # Keep the CI/publish actions themselves current.
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly

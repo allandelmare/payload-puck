@@ -32,7 +32,8 @@ pnpm add @delmaredigital/payload-puck @puckeditor/core
 
 | Dependency | Version |
 |------------|---------|
-| `@puckeditor/core` | >= 0.21.0 |
+| `node` | >= 20.9.0 |
+| `@puckeditor/core` | >= 0.23.0 |
 | `payload` | >= 3.69.0 |
 | `@payloadcms/next` | >= 3.69.0 |
 | `next` | >= 15.4.8 (see security note below) |
@@ -41,6 +42,19 @@ pnpm add @delmaredigital/payload-puck @puckeditor/core
 > **Note:** Puck 0.21+ moved from `@measured/puck` to `@puckeditor/core`. This plugin requires the new package scope.
 
 > **Security:** If your app uses Next.js middleware (or proxy.ts) to protect dynamic routes, use `next` >= 15.5.16 / 16.2.5 to pick up the fix for [CVE-2026-44574](https://github.com/vercel/next.js/security/advisories/GHSA-492v-c6pp-mqqv) (middleware bypass via dynamic route parameter injection). Turbopack users need >= 15.5.18 / 16.2.6.
+
+### Upgrading to 0.7.0 (breaking)
+
+`0.7.0` raises two floors. Both are a one-line change for most projects:
+
+```bash
+pnpm add @puckeditor/core@^0.23.0   # peer floor moved from >=0.21.0
+```
+
+- **`@puckeditor/core` now requires >= 0.23.0.** The Puck plugins this package bundles are versioned in lockstep with Puck core and import it from the host, so running them against an older core is not a supported combination. Puck 0.23 ships a rewritten canvas drag-and-drop engine and a redesigned outline — **the editing experience changes visibly**, even though no API you call has changed. Worth a pass through your editor after upgrading. See the [Puck 0.23 release notes](https://puckeditor.com/blog/puck-023).
+- **Node 18 is no longer supported;** the floor is now `>=20.9.0`. Node 18 is end-of-life and Puck core 0.23 itself requires `>=20.0.0`.
+
+No exports, props, or configuration options were removed or renamed. Full detail in the [changelog](./CHANGELOG.md).
 
 ---
 

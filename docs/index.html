@@ -792,7 +792,7 @@ details .details-body > :first-child { margin-top: 0; }
   <div class="header-brand">
     <span>payload</span>-puck
   </div>
-  <span class="header-badge">v0.6.29</span>
+  <span class="header-badge">v0.7.0</span>
 
   <div class="search-wrap">
     <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -886,11 +886,20 @@ details .details-body > :first-child { margin-top: 0; }
     <div class="section" id="installation">
       <h2>Installation</h2>
 
+      <div class="callout callout-warn">
+        <p><strong>Upgrading to 0.7.0?</strong> Two floors moved: <code>@puckeditor/core</code> now requires
+        <code>&ge; 0.23.0</code> (run <code>pnpm add @puckeditor/core@^0.23.0</code>), and Node 18 is no longer
+        supported (<code>node &ge; 20.9.0</code>). No exports, props, or config options were removed or renamed.
+        Note that Puck 0.23 ships a rewritten drag-and-drop engine and a redesigned outline, so the editing
+        experience changes visibly &mdash; worth a pass through your editor after upgrading.</p>
+      </div>
+
       <h3>Requirements</h3>
       <table>
         <thead><tr><th>Dependency</th><th>Version</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><code>@puckeditor/core</code></td><td>&ge; 0.21.0</td><td>Visual editor core</td></tr>
+          <tr><td><code>node</code></td><td>&ge; 20.9.0</td><td>Runtime</td></tr>
+          <tr><td><code>@puckeditor/core</code></td><td>&ge; 0.23.0</td><td>Visual editor core</td></tr>
           <tr><td><code>payload</code></td><td>&ge; 3.69.0</td><td>CMS backend</td></tr>
           <tr><td><code>@payloadcms/next</code></td><td>&ge; 3.69.0</td><td>Payload Next.js integration</td></tr>
           <tr><td><code>next</code></td><td>&ge; 15.4.8</td><td>React framework</td></tr>

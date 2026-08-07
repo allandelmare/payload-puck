@@ -1,0 +1,15 @@
+{
+  // Typecheck-only config covering the test suite. The root tsconfig.json is the
+  // *build* config: it is rooted at src/ and emits declarations, so tests cannot
+  // live in it without leaking into dist/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src/**/*", "tests/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "src/reference"]
+}

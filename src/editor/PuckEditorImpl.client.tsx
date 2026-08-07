@@ -657,6 +657,7 @@ export function PuckEditorImpl({
       setLastSaved(new Date())
       setSaveError(null)
       setDocumentStatus('draft')
+      savedDataRef.current = data
       markClean()
       onSaveSuccess?.(data)
     } catch (error) {
@@ -748,15 +749,31 @@ export function PuckEditorImpl({
   // Default plugins - headingAnalyzer is always included unless plugins is explicitly false
   const defaultPlugins: PuckPlugin[] = [headingAnalyzer]
 
+  // Restoring a version has already persisted that data server-side, so it
+  // becomes the new saved baseline. Without this, the `setData` dispatch the
+  // restore performs fires an onChange that diffs against the pre-restore
+  // baseline and immediately re-flags the (already saved) document as dirty.
+  const handleRestoreSuccess = useCallback(
+    (restoredData?: Data) => {
+      if (restoredData) {
+        const typedData = restoredData as PuckDataWithMeta
+        savedDataRef.current = typedData
+        latestDataRef.current = typedData
+      }
+      markClean()
+    },
+    [markClean]
+  )
+
   // Version history plugin for the plugin rail
   const versionHistoryPlugin = useMemo(() => {
     if (!pageId) return null
     return createVersionHistoryPlugin({
       pageId,
       apiEndpoint,
-      onRestoreSuccess: markClean,
+      onRestoreSuccess: handleRestoreSuccess,
     })
-  }, [pageId, apiEndpoint, markClean])
+  }, [pageId, apiEndpoint, handleRestoreSuccess])
 
   // Fetch AI prompts client-side when prompts collection is enabled
   // This allows prompts to update in real-time when edited via the prompt editor panel

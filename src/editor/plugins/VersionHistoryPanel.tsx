@@ -39,9 +39,13 @@ export interface VersionHistoryPanelProps {
    */
   apiEndpoint?: string
   /**
-   * Callback after successful restore (e.g., to mark editor as clean)
+   * Callback after successful restore (e.g., to mark editor as clean).
+   *
+   * Receives the restored data that was dispatched into the editor, so the
+   * caller can treat it as the new "last saved" baseline — the restore endpoint
+   * has already persisted it server-side.
    */
-  onRestoreSuccess?: () => void
+  onRestoreSuccess?: (restoredData?: Data) => void
 }
 
 // Panel styles using Puck's CSS variables
@@ -302,8 +306,9 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
         setSuccessMessage(`Restored version from ${formatDate(version.updatedAt)}`)
         setTimeout(() => setSuccessMessage(null), 3000)
 
-        // Notify parent to mark as clean
-        onRestoreSuccess?.()
+        // Notify parent to mark as clean, handing over the restored data so it
+        // becomes the new saved baseline (the restore already persisted it).
+        onRestoreSuccess?.(restoredDoc?.puckData)
 
         // Refresh version list
         fetchVersions()

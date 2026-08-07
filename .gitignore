@@ -4,6 +4,9 @@ node_modules
 # Build output
 dist/
 
+# Test output
+coverage/
+
 # Environment
 .env
 .env.local

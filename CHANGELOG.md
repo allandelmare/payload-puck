@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-07
+
+### Breaking
+
+- **`@puckeditor/core` peer dependency floor raised from `>=0.21.0` to `>=0.23.0`.** The plugins this package bundles (`@puckeditor/plugin-heading-analyzer`, `@puckeditor/plugin-ai`) are versioned in lockstep with Puck core and import it from the host, so shipping the 0.23 line of those plugins against an older core is not a supported combination. **To upgrade:** `pnpm add @puckeditor/core@^0.23.0`. Note that Puck 0.23 ships a rewritten canvas drag-and-drop engine and a redesigned outline — the editing experience changes visibly even though no API you call has changed. See the [Puck 0.23 release notes](https://puckeditor.com/blog/puck-023).
+- **Minimum Node version raised from `^18.20.2 || >=20.9.0` to `>=20.9.0`.** Node 18 reached end-of-life and Puck core 0.23 itself declares `>=20.0.0`, so the old floor was a claim nothing verified. CI now runs the full matrix on Node 20 and 24, making the `engines` field an enforced guarantee rather than an aspiration.
+
+### Fixed
+
+- **The editor no longer flags a document as "Unsaved" on load without any user edit (production builds).** `handleChange` called `markDirty()` unconditionally on every `onChange`, but Puck's mount-time resolve pass dispatches a no-op change whose only difference from the loaded data is `undefined`-valued keys — which strict deep-equality treats as a real change. Incoming data is now diffed against the last loaded/saved state using a new undefined-tolerant comparison (`{}` ≡ `{ k: undefined }`), so a no-op resolve clears the flag instead of setting it while genuine edits still mark the document dirty. Thanks [@georgisoft2020](https://github.com/georgisoft2020). ([#12](https://github.com/delmaredigital/payload-puck/pull/12))
+- **Saving from the preview modal left a stale "last saved" baseline.** `handleSaveFromPreview` marked the document clean but never recorded what it had just saved, so the next no-op `onChange` diffed against the pre-save state and re-flagged the document as dirty — reintroducing the bug above immediately after a successful save.
+- **Restoring a version left the document flagged as dirty despite having just been persisted.** The restore dispatches `setData` into the editor, and the resulting `onChange` fired *after* `markClean()`, flipping the flag straight back. `onRestoreSuccess` now receives the restored data and adopts it as the new saved baseline. (`createVersionHistoryPlugin`'s `onRestoreSuccess` callback gained an optional `restoredData` argument — additive, so existing zero-argument callbacks continue to work unchanged.)
+
+### Changed
+
+- **Bundled Puck plugins updated:** `@puckeditor/plugin-ai` and `@puckeditor/cloud-client` `^0.7.0` → `^0.8.2`, `@puckeditor/plugin-heading-analyzer` `^0.21.2` → `^0.23.0`. The AI bump also resolves a latent peer conflict: `plugin-ai@0.7` pinned `@puckeditor/core` to `^0.21.0`, which warned for anyone already running core 0.22 or newer. `0.8.x` widens that to `^0`. No API surface used by this package changed.
+
+### Added
+
+- **Continuous integration.** `.github/workflows/ci.yml` runs typecheck, tests, and build on every pull request and every push to `main`, across Node 20 and 24. `publish.yml` now calls the same workflow as a hard gate, so a version tag cannot publish to npm unless those checks pass on the exact commit the tag points at — previously a tag published unconditionally.
+- **A test suite.** `vitest` with 46 tests covering the new unsaved-changes comparison, the field-value → CSS converters (including the email-safe variants), and the `editorVersion` content-detection hook. `pnpm test`, `pnpm test:watch`, `pnpm test:coverage`.
+- **Grouped Dependabot configuration** (`.github/dependabot.yml`) for npm and GitHub Actions, so routine dependency refreshes arrive as a few reviewable PRs instead of many near-identical ones.
+
+### Changed (internal)
+
+- **GitHub Releases now lead with the hand-written CHANGELOG entry for the version being released**, followed by GitHub's auto-generated commit/contributor summary, instead of the generated summary alone.
+- `pnpm typecheck` now covers `tests/` as well as `src/`, via a separate `tsconfig.test.json` (the root `tsconfig.json` remains the build config, rooted at `src/`, so tests can never leak into `dist/`).
+
+## [0.6.30] - 2026-07-03
+
 ### Changed
 
 - **The editor's `/api/puck/styles` dev-time compile endpoint now uses conditional HTTP caching (`ETag`/`Last-Modified`, `Cache-Control: no-cache`) instead of `immutable, max-age=31536000`.** The previous header told browsers to cache the compiled CSS forever on a URL with no versioning, so browsers never learned when the underlying source CSS or the plugin's own compilation logic changed. Revalidation is now cheap (a `304` when unchanged) but always happens.

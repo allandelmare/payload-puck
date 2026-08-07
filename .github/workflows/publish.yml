@@ -10,7 +10,14 @@ permissions:
   contents: write
 
 jobs:
+  # Hard gate: a tag publishes nothing unless the full CI matrix passes on the
+  # exact commit the tag points at. Reuses .github/workflows/ci.yml so the
+  # release checks can never drift from the pull-request checks.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: ci
     runs-on: ubuntu-latest
     environment: npm
     steps:
@@ -18,7 +25,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -28,11 +35,35 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Tests and typecheck already ran in the `ci` job above, on this commit.
       - run: pnpm build
 
       - run: npm publish --access public
 
+      # Pull this version's prose out of the CHANGELOG. `--notes-file` is
+      # PREPENDED to `--generate-notes`, so the release reads as: hand-written
+      # "what changed and why", then GitHub's auto-generated "What's Changed"
+      # and "New Contributors" — which is what credits contributors by @handle
+      # and PR number. If no matching section is found we fall back to the
+      # generated notes alone rather than publishing an empty body.
+      - name: Extract release notes from CHANGELOG
+        run: |
+          awk -v ver="${TAG#v}" '
+            $0 ~ "^## \\[" ver "\\]" {flag=1; next}
+            flag && /^## \[/ {exit}
+            flag {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ -s release-notes.md ]; then
+            echo "NOTES_ARG=--notes-file release-notes.md" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No CHANGELOG section found for ${TAG}; using generated notes only."
+            echo "NOTES_ARG=" >> "$GITHUB_ENV"
+          fi
+        env:
+          TAG: ${{ github.ref_name }}
+
       - name: Create GitHub Release
-        run: gh release create ${{ github.ref_name }} --generate-notes
+        run: gh release create "$TAG" $NOTES_ARG --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}

@@ -2,7 +2,7 @@
 
 import { createElement } from 'react'
 import { History } from 'lucide-react'
-import type { Plugin } from '@puckeditor/core'
+import type { Data, Plugin } from '@puckeditor/core'
 import { VersionHistoryPanel } from './VersionHistoryPanel.js'
 
 export interface VersionHistoryPluginOptions {
@@ -16,9 +16,10 @@ export interface VersionHistoryPluginOptions {
    */
   apiEndpoint?: string
   /**
-   * Callback after successful restore (e.g., to mark editor as clean)
+   * Callback after successful restore (e.g., to mark editor as clean).
+   * Receives the restored data that was dispatched into the editor.
    */
-  onRestoreSuccess?: () => void
+  onRestoreSuccess?: (restoredData?: Data) => void
 }
 
 /**
