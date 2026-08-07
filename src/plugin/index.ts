@@ -15,7 +15,6 @@ import {
   createVersionsHandler,
   createRestoreHandler,
 } from '../endpoints/index.js'
-import { createStylesHandler, PUCK_STYLES_ENDPOINT } from '../endpoints/styles.js'
 import { createAiEndpointHandler } from '../endpoints/ai.js'
 import {
   createPromptsListHandler,
@@ -150,9 +149,7 @@ export function createPuckPlugin(options: PuckPluginOptions = {}): Plugin {
     adminViewPath = '/puck-editor',
     enableEndpoints = true,
     pageTreeIntegration, // No default - undefined means auto-detect
-    editorStylesheet,
-    editorStylesheetUrls = [],
-    editorStylesheetCompiled,
+    editorStylesheets: editorStylesheetsOption = [],
     ai: aiConfig,
     previewUrl,
     rootPropsMapping,
@@ -335,20 +332,10 @@ export function createPuckPlugin(options: PuckPluginOptions = {}): Plugin {
       '/puck/:collection/:id/restore',
     ])
 
-    // Build styles endpoint URL list for PuckConfigProvider
-    // In production, prefer the pre-compiled static CSS file if provided
-    // In development, use runtime compilation endpoint for hot reload
-    const isProduction = process.env.NODE_ENV === 'production'
-    const useCompiledCss = isProduction && editorStylesheetCompiled
-
-    const editorStylesheets: string[] = [
-      ...(useCompiledCss
-        ? [editorStylesheetCompiled]
-        : editorStylesheet
-          ? [PUCK_STYLES_ENDPOINT]
-          : []),
-      ...editorStylesheetUrls,
-    ]
+    // Stylesheet URLs for the editor preview iframe. These are passed straight
+    // through: the same URLs resolve in development and production, so the
+    // editor can no longer look correct locally and unstyled in production.
+    const editorStylesheets: string[] = [...editorStylesheetsOption]
 
     // Filter out parameterized puck endpoints from previous plugin instances
     // so we can re-register them with the merged collections list
@@ -359,16 +346,6 @@ export function createPuckPlugin(options: PuckPluginOptions = {}): Plugin {
     const endpoints = enableEndpoints
       ? [
           ...incomingEndpoints,
-          // Styles endpoint MUST be first - exact match before parameterized routes
-          ...(editorStylesheet
-            ? [
-                {
-                  path: '/puck/styles',
-                  method: 'get' as const,
-                  handler: createStylesHandler(editorStylesheet),
-                },
-              ]
-            : []),
           // AI endpoint (exact match, before parameterized routes)
           ...(aiConfig?.enabled
             ? [
@@ -532,9 +509,6 @@ export {
 
 // Export the edit button generator for hybrid collections
 export { generatePuckEditField }
-
-// Export styles endpoint constant
-export { PUCK_STYLES_ENDPOINT } from '../endpoints/styles.js'
 
 // Re-export hooks for hybrid collection integration
 export {

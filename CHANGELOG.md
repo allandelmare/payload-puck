@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-07
+
+### Breaking
+
+- **Editor CSS is no longer compiled by this plugin. You now build it with Tailwind's own CLI and hand the plugin a URL.** The three stylesheet options (`editorStylesheet`, `editorStylesheetCompiled`, `editorStylesheetUrls`) collapse into one: **`editorStylesheets: string[]`**, a plain ordered list of URLs the editor iframe loads. Removed alongside them: the `/api/puck/styles` runtime-compilation endpoint, the `@delmaredigital/payload-puck/next` entry point and its `withPuckCSS()` wrapper, and the `postcss` / `postcss-load-config` peer dependencies (nothing in the plugin imports them any more).
+
+  **To upgrade**, generate the stylesheet in your build and pass its URL:
+
+  ```jsonc
+  // package.json
+  "scripts": {
+    "build:puck-css": "tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css",
+    "build": "pnpm build:puck-css && next build",
+    "dev": "pnpm build:puck-css --watch & next dev"
+  }
+  ```
+
+  ```typescript
+  // payload.config.ts — before
+  createPuckPlugin({
+    editorStylesheet: 'src/app/(frontend)/globals.css',
+    editorStylesheetCompiled: '/puck-editor-styles.css',
+    editorStylesheetUrls: ['https://fonts.googleapis.com/css2?family=Inter'],
+  })
+
+  // after
+  createPuckPlugin({
+    editorStylesheets: ['/puck-editor-styles.css', 'https://fonts.googleapis.com/css2?family=Inter'],
+  })
+  ```
+
+  Then delete the `withPuckCSS` import and wrapper from `next.config.js`, and drop any `editorStylesheets` prop you were passing to `PuckConfigProvider` — the plugin publishes the resolved list on `config.custom.puck.editorStylesheets` and `PuckEditorView` passes it to the editor for you. (The prop still works as an escape hatch for custom editor routes.)
+
+  **Why:** the old design resolved a *different* URL per environment — a runtime PostCSS/Tailwind compile in development, a build-time file in production — and the production half was produced by a **webpack plugin**. Next.js 16 defaults to Turbopack, which never calls the `webpack()` config hook, so on any Next 16 project the production stylesheet was silently never generated and the editor rendered completely unstyled — while local development, served by the runtime endpoint, looked perfect. Compiling at runtime was also wrong on its own terms: it put a full Tailwind build on the request path and required build tooling as production dependencies. Your app's own toolchain already compiles this CSS correctly; the plugin now consumes that artifact instead of reimplementing it, and the same URL resolves in every environment.
+
+### Fixed
+
+- **The editor preview rendered unstyled in production on any Next.js 16 project.** Root cause above: `withPuckCSS` was webpack-only and Next 16 defaults to Turbopack, so `public/puck-editor-styles.css` was never written and the iframe's stylesheet request 404'd. Now that the file is produced by an ordinary build script, it cannot depend on which bundler Next chose.
+
+### Removed
+
+- `@delmaredigital/payload-puck/next` entry point (`withPuckCSS`, `getPuckCSSPath`, `PUCK_CSS_OUTPUT_DEFAULT`).
+- `/api/puck/styles` endpoint and the `PUCK_STYLES_ENDPOINT` constant.
+- `postcss` and `postcss-load-config` peer dependencies.
+
+### Added
+
+- Tests pinning the stylesheet contract, including one asserting the resolved URLs are **identical across `development`, `production`, and `test`** — the environment-dependent resolution is what made the outage invisible locally, so it is now a test failure rather than a deploy-time surprise.
+
 ## [0.7.0] - 2026-08-07
 
 ### Breaking

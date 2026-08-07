@@ -43,6 +43,43 @@ pnpm add @delmaredigital/payload-puck @puckeditor/core
 
 > **Security:** If your app uses Next.js middleware (or proxy.ts) to protect dynamic routes, use `next` >= 15.5.16 / 16.2.5 to pick up the fix for [CVE-2026-44574](https://github.com/vercel/next.js/security/advisories/GHSA-492v-c6pp-mqqv) (middleware bypass via dynamic route parameter injection). Turbopack users need >= 15.5.18 / 16.2.6.
 
+### Upgrading to 0.8.0 (breaking)
+
+**Editor CSS is now built by your app, not by this plugin.** Three options collapse into one, and `withPuckCSS` is gone.
+
+Add a build step using Tailwind's own CLI:
+
+```jsonc
+// package.json
+"scripts": {
+  "build:puck-css": "tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css",
+  "build": "pnpm build:puck-css && next build",
+  "dev": "pnpm build:puck-css --watch & next dev"
+}
+```
+
+Then pass the URL:
+
+```typescript
+// before
+createPuckPlugin({
+  editorStylesheet: 'src/app/(frontend)/globals.css',
+  editorStylesheetCompiled: '/puck-editor-styles.css',
+  editorStylesheetUrls: ['https://fonts.googleapis.com/css2?family=Inter'],
+})
+
+// after
+createPuckPlugin({
+  editorStylesheets: ['/puck-editor-styles.css', 'https://fonts.googleapis.com/css2?family=Inter'],
+})
+```
+
+Finally, remove the `withPuckCSS` import and wrapper from `next.config.js`, and drop any `editorStylesheets` prop on `PuckConfigProvider` — the plugin wires it through automatically now.
+
+> **Why:** the old approach compiled CSS at runtime in dev and via a **webpack plugin** in production. Next.js 16 defaults to Turbopack, which never runs `webpack()` hooks — so the production stylesheet was silently never generated and the editor rendered unstyled, while local dev looked perfect. One artifact, built by your own toolchain, now resolves identically everywhere.
+
+Also removed: the `/api/puck/styles` endpoint, the `/next` entry point, and the `postcss` / `postcss-load-config` peer dependencies.
+
 ### Upgrading to 0.7.0 (breaking)
 
 `0.7.0` raises two floors. Both are a one-line change for most projects:

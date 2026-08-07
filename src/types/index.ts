@@ -163,44 +163,44 @@ export interface PuckPluginOptions {
   pageTreeIntegration?: boolean | PageTreeIntegrationOptions
 
   /**
-   * Path to CSS file for editor iframe styling.
-   * The plugin compiles this file with PostCSS/Tailwind and serves it at /api/puck/styles.
-   * This allows the editor preview to display your frontend styles (CSS variables, Tailwind utilities).
+   * Stylesheet URLs to load inside the editor preview iframe, in order.
    *
-   * @example 'src/app/(frontend)/globals.css'
-   * @example 'src/styles/globals.css'
-   */
-  editorStylesheet?: string
-
-  /**
-   * Additional stylesheet URLs to load in the editor iframe.
-   * Use this for external stylesheets like Google Fonts that can't be compiled.
+   * These are plain URLs the browser fetches — a static file your build emits,
+   * or any external stylesheet. The plugin does not compile CSS: your app's own
+   * toolchain already does that far better than we can, and compiling it a
+   * second time was the source of a dev/production split where the editor
+   * looked correct locally and unstyled in production.
    *
-   * @example ['https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700']
-   */
-  editorStylesheetUrls?: string[]
-
-  /**
-   * Path to pre-compiled CSS file for production use.
-   * When set, the editor will load this static file instead of using the runtime compilation endpoint.
-   * Use with `withPuckCSS()` from `@delmaredigital/payload-puck/next` to compile CSS at build time.
+   * Generate the file with Tailwind's own CLI as part of your build, so the
+   * editor loads byte-identical CSS in every environment:
    *
-   * @example '/puck-editor-styles.css'
+   * ```jsonc
+   * // package.json
+   * {
+   *   "scripts": {
+   *     "build:puck-css": "tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css",
+   *     "build": "pnpm build:puck-css && next build",
+   *     "dev": "pnpm build:puck-css --watch & next dev"
+   *   }
+   * }
+   * ```
    *
-   * @example
    * ```typescript
-   * // next.config.js
-   * import { withPuckCSS } from '@delmaredigital/payload-puck/next'
-   * export default withPuckCSS({ cssInput: 'src/globals.css' })(nextConfig)
-   *
-   * // payload.config.ts
    * createPuckPlugin({
-   *   editorStylesheet: 'src/globals.css', // For dev (runtime compilation)
-   *   editorStylesheetCompiled: '/puck-editor-styles.css', // For prod (static file)
+   *   editorStylesheets: [
+   *     '/puck-editor-styles.css',
+   *     'https://fonts.googleapis.com/css2?family=Inter:wght@400;700',
+   *   ],
    * })
    * ```
+   *
+   * Resolved URLs are published on `config.custom.puck.editorStylesheets` and
+   * passed to the editor automatically — you do not need to repeat them on
+   * `PuckConfigProvider`.
+   *
+   * @example ['/puck-editor-styles.css']
    */
-  editorStylesheetCompiled?: string
+  editorStylesheets?: string[]
 
   /**
    * AI configuration for the plugin.

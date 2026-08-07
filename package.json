@@ -82,11 +82,6 @@
       "types": "./dist/ai/index.d.ts",
       "default": "./dist/ai/index.js"
     },
-    "./next": {
-      "import": "./dist/next/index.js",
-      "types": "./dist/next/index.d.ts",
-      "default": "./dist/next/index.js"
-    },
     "./email": {
       "import": "./dist/email/index.js",
       "types": "./dist/email/index.d.ts",
@@ -123,8 +118,6 @@
     "@tailwindcss/postcss": ">=4.0.0",
     "next": ">=15.4.8",
     "payload": ">=3.69.0",
-    "postcss": ">=8.0.0",
-    "postcss-load-config": ">=4.0.0",
     "react": ">=19.2.1",
     "react-dom": ">=19.2.1",
     "tailwindcss": ">=3.0.0 || >=4.0.0",
@@ -135,12 +128,6 @@
       "optional": true
     },
     "@payloadcms/next": {
-      "optional": true
-    },
-    "postcss": {
-      "optional": true
-    },
-    "postcss-load-config": {
       "optional": true
     },
     "tailwindcss": {

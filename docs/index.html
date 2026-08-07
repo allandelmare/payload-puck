@@ -792,7 +792,7 @@ details .details-body > :first-child { margin-top: 0; }
   <div class="header-brand">
     <span>payload</span>-puck
   </div>
-  <span class="header-badge">v0.7.0</span>
+  <span class="header-badge">v0.8.0</span>
 
   <div class="search-wrap">
     <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -887,6 +887,11 @@ details .details-body > :first-child { margin-top: 0; }
       <h2>Installation</h2>
 
       <div class="callout callout-warn">
+        <p><strong>Upgrading to 0.8.0?</strong> Editor CSS is now built by your app instead of by this plugin.
+        <code>editorStylesheet</code>/<code>editorStylesheetCompiled</code>/<code>editorStylesheetUrls</code> collapse into
+        a single <code>editorStylesheets</code> array of URLs, and <code>withPuckCSS()</code> is removed &mdash; see
+        <a href="#editor-stylesheet">Editor Stylesheet</a>. This fixes the editor rendering unstyled in production on
+        Next.js 16 (Turbopack never ran the webpack plugin that produced the old file).</p>
         <p><strong>Upgrading to 0.7.0?</strong> Two floors moved: <code>@puckeditor/core</code> now requires
         <code>&ge; 0.23.0</code> (run <code>pnpm add @puckeditor/core@^0.23.0</code>), and Node 18 is no longer
         supported (<code>node &ge; 20.9.0</code>). No exports, props, or config options were removed or renamed.
@@ -2283,9 +2288,7 @@ payload generate:importmap</code></pre>
           <tr><td><code>adminViewPath</code></td><td><code>'/puck-editor'</code></td><td>Path for the editor (full: <code>/admin/puck-editor/:collection/:id</code>)</td></tr>
           <tr><td><code>pageTreeIntegration</code></td><td>auto-detect</td><td>Integration with <code>@delmaredigital/payload-page-tree</code></td></tr>
           <tr><td><code>layouts</code></td><td><code>undefined</code></td><td>Layout definitions for page templates</td></tr>
-          <tr><td><code>editorStylesheet</code></td><td><code>undefined</code></td><td>Path to CSS file for editor iframe styling</td></tr>
-          <tr><td><code>editorStylesheetCompiled</code></td><td><code>undefined</code></td><td>Path to pre-compiled CSS for production</td></tr>
-          <tr><td><code>editorStylesheetUrls</code></td><td><code>[]</code></td><td>Additional stylesheet URLs for the editor (e.g., Google Fonts)</td></tr>
+          <tr><td><code>editorStylesheets</code></td><td><code>[]</code></td><td>Ordered stylesheet URLs loaded in the editor iframe</td></tr>
           <tr><td><code>previewUrl</code></td><td><code>undefined</code></td><td>URL for "View" button &mdash; string or function receiving page data</td></tr>
         </tbody>
       </table>
@@ -2318,59 +2321,34 @@ payload generate:importmap</code></pre>
     <!-- EDITOR STYLESHEET -->
     <div class="section" id="editor-stylesheet">
       <h2>Editor Stylesheet</h2>
-      <p>The Puck editor renders page content in an iframe. By default, this iframe doesn't have access to your frontend's CSS (Tailwind utilities, CSS variables, fonts). The <code>editorStylesheet</code> option solves this by compiling and serving your CSS.</p>
+      <p>The Puck editor renders your page components inside an iframe, which has no access to your frontend&rsquo;s CSS (Tailwind utilities, CSS variables, fonts) unless you give it some. The <code>editorStylesheets</code> option takes an ordered list of URLs the iframe loads.</p>
 
-      <details>
-        <summary>Development (Runtime Compilation)</summary>
-        <div class="details-body">
-          <p>In development, CSS is compiled at runtime for hot reload support:</p>
-          <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-func">createPuckPlugin</span>({
+      <div class="callout callout-note">
+        <p>The plugin does <strong>not</strong> compile CSS. Your app&rsquo;s build already does that correctly &mdash; you point the editor at the result. The same URLs resolve in development and production, so the editor cannot look right locally and unstyled in production.</p>
+      </div>
+
+      <h3>Step 1: Build the stylesheet</h3>
+      <p>Use Tailwind&rsquo;s own CLI as part of your build, so the editor loads byte-identical CSS in every environment:</p>
+      <pre><span class="lang-tag">json</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-comment">// package.json</span>
+<span class="hl-string">"scripts"</span>: {
+  <span class="hl-string">"build:puck-css"</span>: <span class="hl-string">"tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css"</span>,
+  <span class="hl-string">"build"</span>: <span class="hl-string">"pnpm build:puck-css &amp;&amp; next build"</span>,
+  <span class="hl-string">"dev"</span>: <span class="hl-string">"pnpm build:puck-css --watch &amp; next dev"</span>
+}</code></pre>
+
+      <h3>Step 2: Point the plugin at it</h3>
+      <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-func">createPuckPlugin</span>({
   pagesCollection: <span class="hl-string">'pages'</span>,
-  editorStylesheet: <span class="hl-string">'src/app/(frontend)/globals.css'</span>,
-  editorStylesheetUrls: [
-    <span class="hl-string">'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap'</span>
+  editorStylesheets: [
+    <span class="hl-string">'/puck-editor-styles.css'</span>,
+    <span class="hl-string">'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap'</span>,
   ],
 })</code></pre>
-          <p>The plugin creates an endpoint at <code>/api/puck/styles</code>. On first request, the CSS is compiled with PostCSS/Tailwind and cached. The iframe loads this compiled CSS.</p>
-        </div>
-      </details>
+      <p>Order matters &mdash; later sheets override earlier ones. Resolved URLs are published on <code>config.custom.puck.editorStylesheets</code> and passed to the editor automatically, so you do <strong>not</strong> need to repeat them on <code>PuckConfigProvider</code>.</p>
 
-      <details>
-        <summary>Production (Build-Time Compilation)</summary>
-        <div class="details-body">
-          <p>Runtime compilation fails on serverless platforms (Vercel, Netlify, etc.) because source CSS files aren't deployed. Use <code>withPuckCSS()</code> to compile CSS at build time:</p>
-          <h4>Step 1: Wrap your Next.js config</h4>
-          <pre><span class="lang-tag">js</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-comment">// next.config.js</span>
-<span class="hl-keyword">import</span> { <span class="hl-func">withPuckCSS</span> } <span class="hl-keyword">from</span> <span class="hl-string">'@delmaredigital/payload-puck/next'</span>
-<span class="hl-keyword">import</span> { <span class="hl-func">withPayload</span> } <span class="hl-keyword">from</span> <span class="hl-string">'@payloadcms/next/withPayload'</span>
-
-<span class="hl-keyword">const</span> nextConfig = {
-  <span class="hl-comment">// your config...</span>
-}
-
-<span class="hl-keyword">export default</span> <span class="hl-func">withPuckCSS</span>({
-  cssInput: <span class="hl-string">'src/app/(frontend)/globals.css'</span>,
-})(<span class="hl-func">withPayload</span>(nextConfig))</code></pre>
-          <h4>Step 2: Add the compiled path to your plugin config</h4>
-          <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-func">createPuckPlugin</span>({
-  pagesCollection: <span class="hl-string">'pages'</span>,
-  editorStylesheet: <span class="hl-string">'src/app/(frontend)/globals.css'</span>,      <span class="hl-comment">// For dev (runtime)</span>
-  editorStylesheetCompiled: <span class="hl-string">'/puck-editor-styles.css'</span>,     <span class="hl-comment">// For prod (static)</span>
-  editorStylesheetUrls: [
-    <span class="hl-string">'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap'</span>
-  ],
-})</code></pre>
-          <table>
-            <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
-            <tbody>
-              <tr><td><code>cssInput</code></td><td>(required)</td><td>Path to source CSS file</td></tr>
-              <tr><td><code>cssOutput</code></td><td><code>'puck-editor-styles.css'</code></td><td>Output filename in <code>public/</code></td></tr>
-              <tr><td><code>skipInDev</code></td><td><code>true</code></td><td>Skip compilation in development</td></tr>
-            </tbody>
-          </table>
-          <p><strong>Requirements:</strong> <code>postcss</code> must be installed in your project. For Tailwind v4: <code>@tailwindcss/postcss</code>. For Tailwind v3: <code>tailwindcss</code>.</p>
-        </div>
-      </details>
+      <div class="callout callout-warn">
+        <p><strong>Changed in 0.8.0.</strong> <code>editorStylesheet</code>, <code>editorStylesheetCompiled</code> and <code>editorStylesheetUrls</code> are replaced by the single <code>editorStylesheets</code> array. The <code>/api/puck/styles</code> endpoint and the <code>withPuckCSS()</code> wrapper (<code>/next</code> entry point) are removed. Previously production CSS was emitted by a <em>webpack plugin</em> &mdash; and Next.js 16 defaults to Turbopack, which never runs <code>webpack()</code> hooks, so that file was silently never generated.</p>
+      </div>
     </div>
 
     <!-- CUSTOM API ROUTES -->
@@ -2410,7 +2388,6 @@ payload generate:importmap</code></pre>
           <tr><td><code>@delmaredigital/payload-puck/ai</code></td><td>AI plugins, hooks, config utilities, API routes</td></tr>
           <tr><td><code>@delmaredigital/payload-puck/email</code></td><td><code>EmailRenderer</code>, <code>renderToEmailHtml</code>, <code>emailBaseConfig</code>, <code>emailEditorConfig</code></td></tr>
           <tr><td><code>@delmaredigital/payload-puck/email/components</code></td><td>Individual email component configs (server, editor, types)</td></tr>
-          <tr><td><code>@delmaredigital/payload-puck/next</code></td><td><code>withPuckCSS</code> Next.js config wrapper for build-time CSS</td></tr>
           <tr><td><code>@delmaredigital/payload-puck/admin/client</code></td><td><code>EditWithPuckButton</code>, <code>EditWithPuckCell</code></td></tr>
         </tbody>
       </table>
