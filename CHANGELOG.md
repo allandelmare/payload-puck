@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **GitHub Releases now lead with the hand-written CHANGELOG entry for the version being released**, followed by GitHub's auto-generated commit/contributor summary, instead of the generated summary alone.
 - `pnpm typecheck` now covers `tests/` as well as `src/`, via a separate `tsconfig.test.json` (the root `tsconfig.json` remains the build config, rooted at `src/`, so tests can never leak into `dist/`).
+- **`typecheck` and `test` no longer fail on a fresh clone.** `src/version.ts` is generated (and git-ignored), but generation was attached only to `prebuild` — so any command that compiles `src/` without building first failed with `Cannot find module '../../version.js'`. It went unnoticed because a previous local build always left the file behind. Generation is now chained explicitly into `build`, `typecheck`, and the `test` scripts rather than relying on pnpm's pre/post script hooks. Caught by the new CI on its first run.
 
 ## [0.6.30] - 2026-07-03
 
