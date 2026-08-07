@@ -47,16 +47,23 @@ pnpm add @delmaredigital/payload-puck @puckeditor/core
 
 **Editor CSS is now built by your app, not by this plugin.** Three options collapse into one, and `withPuckCSS` is gone.
 
-Add a build step using Tailwind's own CLI:
+Add a build step using Tailwind's own CLI. Tailwind v4 ships the CLI as a separate package:
+
+```bash
+pnpm add -D @tailwindcss/cli   # v4 only; v3 already provides the `tailwindcss` binary
+```
 
 ```jsonc
-// package.json
+// package.json — quote the paths; App Router route groups like (frontend) are shell syntax
 "scripts": {
-  "build:puck-css": "tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css",
+  "build:puck-css": "tailwindcss -i './src/app/(frontend)/globals.css' -o './public/puck-editor-styles.css'",
+  "dev:puck-css": "tailwindcss -i './src/app/(frontend)/globals.css' -o './public/puck-editor-styles.css' --watch",
   "build": "pnpm build:puck-css && next build",
-  "dev": "pnpm build:puck-css --watch & next dev"
+  "dev": "pnpm build:puck-css && next dev"
 }
 ```
+
+Add `public/puck-editor-styles.css` to `.gitignore` — it's a build artifact. Run `dev:puck-css` in a second terminal while actively editing theme CSS.
 
 Then pass the URL:
 

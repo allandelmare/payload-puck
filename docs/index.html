@@ -2328,13 +2328,16 @@ payload generate:importmap</code></pre>
       </div>
 
       <h3>Step 1: Build the stylesheet</h3>
-      <p>Use Tailwind&rsquo;s own CLI as part of your build, so the editor loads byte-identical CSS in every environment:</p>
-      <pre><span class="lang-tag">json</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-comment">// package.json</span>
+      <p>Use Tailwind&rsquo;s own CLI as part of your build, so the editor loads byte-identical CSS in every environment. Tailwind v4 ships the CLI as a separate package:</p>
+      <pre><span class="lang-tag">bash</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code>pnpm add -D @tailwindcss/cli   <span class="hl-comment"># v4 only; v3 already provides the `tailwindcss` binary</span></code></pre>
+      <pre><span class="lang-tag">json</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-comment">// package.json &mdash; quote the paths; route groups like (frontend) are shell syntax</span>
 <span class="hl-string">"scripts"</span>: {
-  <span class="hl-string">"build:puck-css"</span>: <span class="hl-string">"tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css"</span>,
+  <span class="hl-string">"build:puck-css"</span>: <span class="hl-string">"tailwindcss -i './src/app/(frontend)/globals.css' -o './public/puck-editor-styles.css'"</span>,
+  <span class="hl-string">"dev:puck-css"</span>: <span class="hl-string">"tailwindcss -i './src/app/(frontend)/globals.css' -o './public/puck-editor-styles.css' --watch"</span>,
   <span class="hl-string">"build"</span>: <span class="hl-string">"pnpm build:puck-css &amp;&amp; next build"</span>,
-  <span class="hl-string">"dev"</span>: <span class="hl-string">"pnpm build:puck-css --watch &amp; next dev"</span>
+  <span class="hl-string">"dev"</span>: <span class="hl-string">"pnpm build:puck-css &amp;&amp; next dev"</span>
 }</code></pre>
+      <p>Add <code>public/puck-editor-styles.css</code> to <code>.gitignore</code> &mdash; it is a build artifact. Run <code>dev:puck-css</code> in a second terminal while actively editing theme CSS.</p>
 
       <h3>Step 2: Point the plugin at it</h3>
       <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code><span class="hl-func">createPuckPlugin</span>({

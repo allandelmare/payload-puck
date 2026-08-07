@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-07
+
+### Fixed
+
+- **Corrected the 0.8.0 upgrade instructions**, which did not work as written. Two problems, both found by running them against a real project: Tailwind **v4 ships its CLI as a separate package**, so `pnpm add -D @tailwindcss/cli` is required before the `tailwindcss` binary exists (v3 bundles it); and the example paths were unquoted, so an App Router route group like `src/app/(frontend)/globals.css` aborted with a shell syntax error on the parentheses. Docs-only — no code change.
+
 ## [0.8.0] - 2026-08-07
 
 ### Breaking
@@ -15,14 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   **To upgrade**, generate the stylesheet in your build and pass its URL:
 
+  Tailwind v4 ships its CLI separately, so install it first: `pnpm add -D @tailwindcss/cli` (v3 users already have the `tailwindcss` binary).
+
   ```jsonc
-  // package.json
+  // package.json — quote the paths; App Router route groups like (frontend) are shell syntax
   "scripts": {
-    "build:puck-css": "tailwindcss -i ./src/app/(frontend)/globals.css -o ./public/puck-editor-styles.css",
+    "build:puck-css": "tailwindcss -i './src/app/(frontend)/globals.css' -o './public/puck-editor-styles.css'",
+    "dev:puck-css": "tailwindcss -i './src/app/(frontend)/globals.css' -o './public/puck-editor-styles.css' --watch",
     "build": "pnpm build:puck-css && next build",
-    "dev": "pnpm build:puck-css --watch & next dev"
+    "dev": "pnpm build:puck-css && next dev"
   }
   ```
+
+  Add `public/puck-editor-styles.css` to `.gitignore` — it is a build artifact. Run `dev:puck-css` in a second terminal when you are actively editing theme CSS.
 
   ```typescript
   // payload.config.ts — before
