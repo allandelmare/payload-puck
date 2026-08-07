@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-08-07
+
+### Changed
+
+- **Dependency refresh, including two majors in bundled runtime dependencies.** `lucide-react` `0.469` → `1.30` and `html-react-parser` `5.2.17` → `6.1.5`, plus the `@tiptap/*` family `3.20.1` → `3.29.2` and a dev-tooling/React-types sweep. No API this package exposes changed.
+  - **`lucide-react` v1** — all 68 icons imported across `src/` still resolve, and rendered SVG defaults are unchanged (24×24, `viewBox="0 0 24 24"`, `stroke-width="2"`, `currentColor`), so icons are visually identical. v1 additionally emits `aria-hidden="true"`, which is an accessibility improvement.
+  - **`html-react-parser` v6** — the breaking changes are internal (`html-dom-parser`, `domhandler`, and an es5 → es2016 build target). This package calls `parse(htmlString)` with no options in exactly one place (`RichText.server`), and that signature is unchanged.
+- **GitHub Actions updated:** `actions/checkout` v4 → v7, `actions/setup-node` v4 → v7, `pnpm/action-setup` v4 → v6. This clears the Node 20 deprecation warning every CI run was emitting.
+
+### Added
+
+- **Dependency contract tests** (`tests/deps/contracts.test.ts`) for the two libraries whose major versions can break rendering *silently* rather than loudly. A renamed Lucide export or a changed `parse()` return shape yields a broken page, not a type error — `lucide-react` re-exports a very large namespace and `parse()` is typed loosely. The suite scans `src/` for every icon actually imported and asserts each still exists, checks icons render to `<svg>`, and pins `parse()`'s handling of nested markup, attributes, inline styles, and empty input. It also guards its own scanner, so the icon assertion cannot pass vacuously.
+
 ## [0.8.2] - 2026-08-07
 
 ### Changed
