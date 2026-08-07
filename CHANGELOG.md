@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dev tooling: `vitest` 3 → 4, `@types/node` 24 → 26, `@swc/cli` 0.6 → 0.8.** Dev-only; the published package is unaffected (declaration output verified byte-identical to the 0.8.3 build).
+
+### Deferred
+
+- **TypeScript 7 held at 5.9 deliberately.** It typechecks and builds cleanly, but it changes the *published* `.d.ts` surface. Most differences are harmless — union members and object properties get reordered (order-insensitive), and inference sharpens (`Extension<any, any>` → `Extension<{ types: string[] }, any>`). One is not: components wrapped in `React.memo` emit as `MemoExoticComponent<({ ...every destructured prop }) => JSX.Element>` instead of `NamedExoticComponent<Props>`, which leaks internal parameter names into consumer-facing types and is far noisier on hover. Deferred until TypeScript 7 has more soak time, since there is no benefit to us today — 5.9 typechecks the same code without the churn.
+
 ## [0.8.3] - 2026-08-07
 
 ### Changed
