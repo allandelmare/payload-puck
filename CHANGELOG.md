@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-08-07
+
+### Changed
+
+- **Breaking-change notices now sit at the top of the README**, immediately after the badges rather than buried under `Install > Requirements`, matching the convention used across the sibling plugins. `0.7.0` and `0.8.0` were both breaking and shipped hours apart, so anyone upgrading from `0.6.x` needs both migrations — and the 0.8 one is easy to miss precisely because the symptom (an unstyled editor) only appears in production. Docs-only.
+
 ## [0.8.1] - 2026-08-07
 
 ### Fixed

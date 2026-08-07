@@ -10,6 +10,16 @@ A PayloadCMS plugin for integrating [Puck](https://puckeditor.com) visual page b
   <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdelmaredigital%2Fdd-starter&project-name=my-payload-site&build-command=pnpm%20run%20ci&env=PAYLOAD_SECRET,BETTER_AUTH_SECRET&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%2C%7B%22type%22%3A%22blob%22%7D%5D"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="32"></a>
 </p>
 
+> 🎨 **Upgrading to 0.8?** The editor stylesheet is now built by your app, not by this plugin.
+>
+> - **`editorStylesheet`, `editorStylesheetCompiled` and `editorStylesheetUrls` are replaced by a single `editorStylesheets: string[]`** — an ordered list of URLs the editor iframe loads. The `/api/puck/styles` endpoint, the `/next` entry point and its `withPuckCSS()` wrapper, and the `postcss` / `postcss-load-config` peer dependencies are all removed.
+> - **Action:** install Tailwind's CLI (`pnpm add -D @tailwindcss/cli` on v4), add a `build:puck-css` script that compiles your CSS into `public/`, pass that URL via `editorStylesheets`, and delete the `withPuckCSS` wrapper from `next.config`. Full steps in [Upgrading to 0.8.0](#upgrading-to-080-breaking).
+> - **Why it matters:** the old design compiled CSS at runtime in development but relied on a **webpack plugin** in production. Next.js 16 defaults to Turbopack, which never runs `webpack()` hooks — so on Next 16 the production stylesheet was silently never generated and **the editor rendered completely unstyled in production while looking perfect locally**. If you are on Next 16, this release fixes that. See the [CHANGELOG](./CHANGELOG.md#080---2026-08-07).
+
+---
+
+> 📦 **Upgrading from 0.6.x?** `0.7.0` raised two floors before the 0.8 changes above: **`@puckeditor/core` now requires `>= 0.23.0`** (`pnpm add @puckeditor/core@^0.23.0`) and **Node 18 is no longer supported** (`node >= 20.9.0`). Puck 0.23 also ships a rewritten canvas drag-and-drop engine and a redesigned outline, so the editing experience changes visibly even though no API you call has changed — worth a pass through your editor. Apply both this and the 0.8 migration; see the [CHANGELOG](./CHANGELOG.md#070---2026-08-07).
+
 ---
 
 ## Documentation
