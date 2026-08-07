@@ -17,6 +17,7 @@ import { IframeWrapper, type LayoutStyle } from './components/IframeWrapper.js'
 import { PreviewModal } from './components/PreviewModal.js'
 import { DarkModeStyles } from './components/DarkModeStyles.js'
 import { useUnsavedChanges } from './hooks/useUnsavedChanges.js'
+import { isDataEqual } from './utils/isDataEqual.js'
 import { createVersionHistoryPlugin } from './plugins/versionHistoryPlugin.js'
 import { ThemeProvider, type ThemeConfig } from '../theme/index.js'
 import { usePuckConfig } from '../views/PuckConfigContext.js'
@@ -351,6 +352,12 @@ export function PuckEditorImpl({
   // Use a ref to track latest data without causing re-renders
   const latestDataRef = useRef<PuckDataWithMeta>(dataWithSlug)
 
+  // Track the last loaded/saved data so we can distinguish real user edits from
+  // no-op onChange dispatches (e.g. Puck's mount-time resolve pass). Refreshed at
+  // every markClean() site (save / publish) so subsequent edits diff against the
+  // most recently persisted state.
+  const savedDataRef = useRef<PuckDataWithMeta>(dataWithSlug)
+
   // Get editor stylesheets from PuckConfigProvider context (as fallback)
   const { editorStylesheets: contextStylesheets, editorCss: contextCss } = usePuckConfig()
 
@@ -465,6 +472,7 @@ export function PuckEditorImpl({
         setSaveError(null) // Clear any previous error
         // After saving as draft, update status to draft (shows "Unpublished Changes" if was published)
         setDocumentStatus('draft')
+        savedDataRef.current = typedData
         markClean()
         onSaveSuccess?.(data)
       } catch (error) {
@@ -515,6 +523,7 @@ export function PuckEditorImpl({
         setSaveError(null) // Clear any previous error
         setDocumentStatus('published') // Update status after successful publish
         setWasPublished(true) // Mark as having been published
+        savedDataRef.current = typedData
         markClean()
         onSaveSuccess?.(data)
       } catch (error) {
@@ -568,10 +577,19 @@ export function PuckEditorImpl({
   const handleChange = useCallback(
     (data: Data) => {
       latestDataRef.current = data as PuckDataWithMeta
-      markDirty()
+      // Only mark dirty when the data actually differs from the last loaded/saved
+      // state. Puck fires onChange for no-op mount-time resolves (which can differ
+      // from the loaded data only by undefined-valued keys); treating those as
+      // edits produces a spurious "Unsaved" flag on load. isDataEqual is
+      // undefined-tolerant so those resolves compare equal and clear the flag.
+      if (isDataEqual(data, savedDataRef.current)) {
+        markClean()
+      } else {
+        markDirty()
+      }
       onChangeProp?.(data)
     },
-    [markDirty, onChangeProp]
+    [markClean, markDirty, onChangeProp]
   )
 
   // Handle back navigation
