@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-01
+
 ### Security
 
 - **Breaking: the standalone Next.js route factories in `src/api/` now enforce Payload collection access control ([GHSA-957g-hmmp-rchg](https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-957g-hmmp-rchg)).** `createPuckApiRoutes`, `createPuckApiRoutesWithId` and `createPuckApiRoutesVersions` called Payload's Local API with its default `overrideAccess: true` across all eleven sinks, so collection and field `access` rules were never evaluated. CVE-2026-39397 (fixed in 0.6.23) hardened `src/endpoints/index.ts` but left these three files untouched, and the advisory for it wrongly stated they "had their own authentication checks" — they authenticate, which is not authorization.
@@ -16,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **To upgrade:** build `authenticate` on `payload.auth({ headers: request.headers })`. That runs whatever auth strategies your Payload config registers — Better Auth, Clerk, custom strategies — and returns a real Payload user, which is detected automatically. This is the recommended wiring for *every* auth system, not just Payload's own.
 
   Do **not** return your auth library's session user (`auth.api.getSession()`, `getServerSession()`, a decoded JWT): those carry no `collection` and the routes now fail closed on them. And do not map one back by email — a bare collection row silently drops the fields an auth strategy decorates onto the user. With `payload-better-auth` that means losing `activeOrganizationId`, `organizationRole`, `apiKeyScopes` and `oauthScopes`, so an API-key caller can be judged as an ordinary session. The `toPayloadUser` hook remains for callers that genuinely have no Payload user; whatever it returns *is* the principal access control evaluates.
+
+  **Better Auth compatibility:** any published `@delmaredigital/payload-better-auth` works — its strategy stamps `collection` on the user, which is what the resolution needs. `0.9.0` or later is recommended: it is the first release where this wiring, combined with the headers 0.9 forwards into Payload, is side-effect free for API-key requests. Current is `0.11.3` (requires Better Auth `1.7`).
 
   Routes **fail closed**: if the Payload user cannot be determined the request returns `500` / `PUCK_ACCESS_MISCONFIGURED` and performs no database operation, with the remediation in the server log. It never silently downgrades to anonymous and never silently skips authorization. `dangerouslyDisableCollectionAccessControl: true` restores the old behaviour as an emergency rollback and warns once per factory.
 

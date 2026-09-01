@@ -10,6 +10,15 @@ A PayloadCMS plugin for integrating [Puck](https://puckeditor.com) visual page b
   <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdelmaredigital%2Fdd-starter&project-name=my-payload-site&build-command=pnpm%20run%20ci&env=PAYLOAD_SECRET,BETTER_AUTH_SECRET&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%2C%7B%22type%22%3A%22blob%22%7D%5D"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="32"></a>
 </p>
 
+> 🔒 **Upgrading to 0.9? Security release — action required if you use the standalone route factories.**
+>
+> - **`createPuckApiRoutes`, `createPuckApiRoutesWithId`, `createPuckApiRoutesVersions` and `createPromptApiRoutes` now enforce Payload collection access control** ([GHSA-957g-hmmp-rchg](https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-957g-hmmp-rchg)). They previously called Payload's Local API with the default `overrideAccess: true`, so collection and field `access` rules were **never evaluated** — any caller your `authenticate` hook accepted could read drafts and version history, restore versions over live content, publish, create and delete.
+> - **Action:** build `authenticate` on `payload.auth({ headers: request.headers })`. That works for **every** auth system — Better Auth, Clerk, NextAuth, custom strategies — and needs no other change. Do **not** return your auth library's session user, and do **not** map it back by email. Full steps in [Upgrading to 0.9.0](#upgrading-to-090-breaking-security).
+> - **Not affected:** the built-in `/api/puck/*` endpoints registered by `createPuckPlugin()`. Those were fixed in 0.6.23. If you never wired the standalone factories yourself, this release needs nothing from you.
+> - Also fixed: the AI context/prompts endpoints ([GHSA-rrx7-m589-5wfq](https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-rrx7-m589-5wfq)) and the AI tools, which queried Payload unfiltered.
+
+---
+
 > 🎨 **Upgrading to 0.8?** The editor stylesheet is now built by your app, not by this plugin.
 >
 > - **`editorStylesheet`, `editorStylesheetCompiled` and `editorStylesheetUrls` are replaced by a single `editorStylesheets: string[]`** — an ordered list of URLs the editor iframe loads. The `/api/puck/styles` endpoint, the `/next` entry point and its `withPuckCSS()` wrapper, and the `postcss` / `postcss-load-config` peer dependencies are all removed.
@@ -49,9 +58,49 @@ pnpm add @delmaredigital/payload-puck @puckeditor/core
 | `next` | >= 15.4.8 (see security note below) |
 | `react` | >= 19.2.1 |
 
+> **Using [`@delmaredigital/payload-better-auth`](https://github.com/delmaredigital/payload-better-auth)?** Any published version works — its auth strategy stamps `collection` on the user, which is what 0.9's access resolution needs. **0.9.0 or later is recommended:** it is the first release where the recommended `payload.auth()` wiring, combined with the request headers 0.9 now forwards into Payload, is free of side effects for API-key requests. Current is `0.11.3`, which requires Better Auth `1.7`.
+
 > **Note:** Puck 0.21+ moved from `@measured/puck` to `@puckeditor/core`. This plugin requires the new package scope.
 
 > **Security:** If your app uses Next.js middleware (or proxy.ts) to protect dynamic routes, use `next` >= 15.5.16 / 16.2.5 to pick up the fix for [CVE-2026-44574](https://github.com/vercel/next.js/security/advisories/GHSA-492v-c6pp-mqqv) (middleware bypass via dynamic route parameter injection). Turbopack users need >= 15.5.18 / 16.2.6.
+
+### Upgrading to 0.9.0 (breaking, security)
+
+**Only affects apps that wired the standalone route factories from `@delmaredigital/payload-puck/api` or `/ai`.** The built-in `/api/puck/*` endpoints are unchanged.
+
+These factories now pass `overrideAccess: false` to Payload, so your collection `access` rules are enforced. To do that they must know **which Payload user** a request acts as. Build `authenticate` on `payload.auth()`:
+
+```ts
+import { getPayload } from 'payload'
+import config from '@payload-config'
+
+export const { GET, POST } = createPuckApiRoutes({
+  collection: 'pages',
+  payloadConfig: config,
+  auth: {
+    authenticate: async (request) => {
+      const payload = await getPayload({ config })
+      // Runs whatever auth strategies your Payload config registers.
+      const { user } = await payload.auth({ headers: request.headers })
+      if (!user) return { authenticated: false }
+      return { authenticated: true, user }
+    },
+  },
+})
+```
+
+This is the recommended wiring for **every** auth system, not just Payload's own. If you use Better Auth, keep `strategies: [betterAuthStrategy()]` on your users collection — that plus the snippet above is the whole integration.
+
+**Do not** return your auth library's session user (`auth.api.getSession()`, `getServerSession()`, `getServerUser()`, a decoded JWT). Those carry no `collection`, and these routes now fail closed on them with a `500` / `PUCK_ACCESS_MISCONFIGURED` and **no** database operation, with the fix printed to your server log.
+
+**Do not** map a session back to a user by email either — that is worse than the 500. A bare collection row silently drops the fields your auth strategy decorates onto the user; with `payload-better-auth` you lose `activeOrganizationId`, `organizationRole`, `apiKeyScopes` and `oauthScopes`, so an API-key caller can be judged as an ordinary session and an org-scoped rule evaluated with no organization at all.
+
+Two smaller behaviour changes fall out of this:
+
+- **Denials are now `403`,** not `500`. A Payload `Forbidden` previously arrived as a server error, indistinguishable from an outage. `404` and `409` are likewise passed through.
+- **Request headers now reach your access rules.** They are forwarded into every Payload operation, so a rule that inspects them — an API-key scope check, say — sees the same request the REST API would.
+
+If you are mid-migration and need to ship, `dangerouslyDisableCollectionAccessControl: true` restores the old behaviour and logs a warning once per factory. It leaves you with the vulnerability; treat it as a rollback, not a setting.
 
 ### Upgrading to 0.8.0 (breaking)
 

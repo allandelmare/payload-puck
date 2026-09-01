@@ -792,7 +792,7 @@ details .details-body > :first-child { margin-top: 0; }
   <div class="header-brand">
     <span>payload</span>-puck
   </div>
-  <span class="header-badge">v0.8.0</span>
+  <span class="header-badge">v0.9.0</span>
 
   <div class="search-wrap">
     <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -2395,7 +2395,9 @@ payload generate:importmap</code></pre>
       </div>
 
       <div class="callout callout-note">
-        <p><strong>Better Auth users:</strong> wire <code>strategies: [betterAuthStrategy()]</code> on your users collection as usual, then use the <code>payload.auth()</code> recipe above &mdash; that is the whole integration. Note that Better Auth reads API keys from the <code>x-api-key</code> header by default; <code>Authorization: Bearer &lt;api key&gt;</code> is not authenticated unless you have configured <code>apiKeyHeaders</code> or a custom getter.</p>
+        <p><strong>Better Auth users:</strong> wire <code>strategies: [betterAuthStrategy()]</code> on your users collection as usual, then use the <code>payload.auth()</code> recipe above &mdash; that is the whole integration.</p>
+        <p>Any published <code>@delmaredigital/payload-better-auth</code> works, since its strategy stamps <code>collection</code> on the user. <strong>0.9.0 or later is recommended</strong> &mdash; the first release where this wiring, combined with the headers now forwarded into Payload, is side-effect free for API-key requests. Current is <code>0.11.3</code> (requires Better Auth <code>1.7</code>).</p>
+        <p>Note that Better Auth reads API keys from the <code>x-api-key</code> header by default; <code>Authorization: Bearer &lt;api key&gt;</code> is not authenticated unless you have configured <code>apiKeyHeaders</code> or a custom getter.</p>
       </div>
 
       <h4>Callers with no Payload user</h4>
