@@ -174,7 +174,7 @@
     "payload": "^3.87.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "keywords": [
