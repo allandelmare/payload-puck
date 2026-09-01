@@ -38,6 +38,16 @@ export { createPuckApiRoutes } from './createPuckApiRoutes.js'
 export { createPuckApiRoutesWithId } from './createPuckApiRoutesWithId.js'
 export { createPuckApiRoutesVersions } from './createPuckApiRoutesVersions.js'
 
+// Access control
+export {
+  isPayloadUser,
+  resolvePayloadUser,
+  createAccessResolver,
+  accessMisconfigurationResponse,
+  PuckApiAccessError,
+} from './utils/access.js'
+export type { PayloadAccessArgs, AccessResolverConfig } from './utils/access.js'
+
 // Utilities
 export {
   mapRootPropsToPayloadFields,
@@ -53,6 +63,7 @@ export {
 export type {
   // Auth types
   AuthenticatedUser,
+  PayloadUser,
   AuthResult,
   PermissionResult,
   PuckApiAuthHooks,

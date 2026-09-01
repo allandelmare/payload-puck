@@ -8,6 +8,11 @@ import type {
   CreatePageBody,
   RouteHandlerContext,
 } from './types.js'
+import {
+  createAccessResolver,
+  accessMisconfigurationResponse,
+} from './utils/access.js'
+import { payloadErrorResponse } from '../utils/payloadErrors.js'
 
 /**
  * Default Puck data for new pages
@@ -61,6 +66,10 @@ export function createPuckApiRoutes(
     enableDrafts = true,
     onError,
   } = routeConfig
+
+  // Resolves { overrideAccess, user } for every Payload call below. Built once
+  // so the opt-out warning is logged per factory, not per request.
+  const resolveAccess = createAccessResolver(routeConfig)
 
   /**
    * GET /api/puck/pages
@@ -131,8 +140,13 @@ export function createPuckApiRoutes(
             : { and: conditions }
           : undefined
 
+      const access = await resolveAccess(authResult, request)
+
+      // Access control is evaluated by Payload, so the page list is filtered to
+      // documents the caller may actually read.
       const result = await payload.find({
         collection,
+        ...access,
         page,
         limit,
         sort,
@@ -144,7 +158,14 @@ export function createPuckApiRoutes(
       if (onError) {
         onError(error, { operation: 'list', request })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error listing pages:', error)
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
+
       return NextResponse.json(
         { error: 'Failed to list pages' },
         { status: 500 }
@@ -200,9 +221,16 @@ export function createPuckApiRoutes(
       const config = await payloadConfig
       const payload = await getPayload({ config })
 
-      // Check if slug already exists
+      const access = await resolveAccess(authResult, request)
+
+      // Check if slug already exists. This runs under access control, so a
+      // caller cannot use it to probe for the existence of documents they may
+      // not read. The trade-off is that an unreadable collision is not caught
+      // here — Payload's unique constraint catches it on create below, and the
+      // ValidationError handler maps it back to the same 409.
       const existing = await payload.find({
         collection,
+        ...access,
         where: { slug: { equals: slug } },
         limit: 1,
       })
@@ -229,6 +257,7 @@ export function createPuckApiRoutes(
       // Create the page
       const newPage = await payload.create({
         collection,
+        ...access,
         draft: enableDrafts,
         data: {
           title,
@@ -244,7 +273,38 @@ export function createPuckApiRoutes(
       if (onError) {
         onError(error, { operation: 'create', request })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error creating page:', error)
+
+      // A unique-constraint failure on slug means the page exists but was not
+      // visible to the pre-check above under access control. Report the same 409
+      // the pre-check would have, rather than a generic 500.
+      if (error instanceof Error && error.name === 'ValidationError') {
+        const validationError = error as Error & {
+          data?: { errors?: Array<{ field: string; message: string }> }
+        }
+        const fieldErrors = validationError.data?.errors || []
+        if (fieldErrors.some((e) => e.field === 'slug')) {
+          return NextResponse.json(
+            { error: 'A page with this slug already exists' },
+            { status: 409 }
+          )
+        }
+        return NextResponse.json(
+          {
+            error: `Validation failed: ${fieldErrors.map((e) => e.message || e.field).join(', ')}`,
+            details: fieldErrors,
+          },
+          { status: 400 }
+        )
+      }
+
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
+
       return NextResponse.json(
         { error: 'Failed to create page' },
         { status: 500 }

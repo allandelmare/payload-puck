@@ -2,6 +2,11 @@ import type { NextRequest } from 'next/server'
 import { getPayload } from 'payload'
 import type { SanitizedConfig } from 'payload'
 import type { PuckApiAuthHooks, RouteHandler, RouteHandlerWithId } from '../../api/types.js'
+import {
+  createAccessResolver,
+  accessMisconfigurationResponse,
+} from '../../api/utils/access.js'
+import { payloadErrorResponse } from '../../utils/payloadErrors.js'
 
 /**
  * Configuration for AI prompts API routes
@@ -20,6 +25,14 @@ export interface PromptApiRoutesConfig {
    * @default 'puck-ai-prompts'
    */
   collection?: string
+  /**
+   * **SECURITY — see `PuckApiRoutesConfig.dangerouslyDisableCollectionAccessControl`.**
+   * Restores the pre-0.9.0 behaviour in which Payload collection access rules
+   * were not enforced on these routes.
+   *
+   * @default false
+   */
+  dangerouslyDisableCollectionAccessControl?: true
 }
 
 /**
@@ -64,12 +77,15 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
 } {
   const { payloadConfig, auth, collection = 'puck-ai-prompts' } = config
 
+  // Resolves { overrideAccess, user } for every Payload call below.
+  const resolveAccess = createAccessResolver(config)
+
   return {
     GET: async (request: NextRequest): Promise<Response> => {
       try {
         // Authenticate
         const authResult = await auth.authenticate(request)
-        if (!authResult.authenticated) {
+        if (!authResult.authenticated || !authResult.user) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },
@@ -80,8 +96,11 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
         const payload = await getPayload({ config: await payloadConfig })
 
         // Fetch prompts
+        const access = await resolveAccess(authResult, request)
+
         const result = await payload.find({
           collection,
+          ...access,
           sort: 'order',
           limit: 100,
         })
@@ -91,6 +110,12 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
           headers: { 'Content-Type': 'application/json' },
         })
       } catch (error) {
+        const misconfigured = accessMisconfigurationResponse(error)
+        if (misconfigured) return misconfigured
+
+        const mapped = payloadErrorResponse(error)
+        if (mapped) return mapped
+
         console.error('[AI Prompts] Error fetching prompts:', error)
         return new Response(
           JSON.stringify({ error: 'Failed to fetch prompts' }),
@@ -103,7 +128,7 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
       try {
         // Authenticate
         const authResult = await auth.authenticate(request)
-        if (!authResult.authenticated) {
+        if (!authResult.authenticated || !authResult.user) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },
@@ -117,8 +142,11 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
         const body = await request.json()
 
         // Create prompt
+        const access = await resolveAccess(authResult, request)
+
         const result = await payload.create({
           collection,
+          ...access,
           data: {
             label: body.label,
             prompt: body.prompt,
@@ -132,6 +160,12 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
           headers: { 'Content-Type': 'application/json' },
         })
       } catch (error) {
+        const misconfigured = accessMisconfigurationResponse(error)
+        if (misconfigured) return misconfigured
+
+        const mapped = payloadErrorResponse(error)
+        if (mapped) return mapped
+
         console.error('[AI Prompts] Error creating prompt:', error)
         return new Response(
           JSON.stringify({ error: 'Failed to create prompt' }),
@@ -151,12 +185,15 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
 } {
   const { payloadConfig, auth, collection = 'puck-ai-prompts' } = config
 
+  // Resolves { overrideAccess, user } for every Payload call below.
+  const resolveAccess = createAccessResolver(config)
+
   return {
     PATCH: async (request: NextRequest, context): Promise<Response> => {
       try {
         // Authenticate
         const authResult = await auth.authenticate(request)
-        if (!authResult.authenticated) {
+        if (!authResult.authenticated || !authResult.user) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },
@@ -174,8 +211,11 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
         const body = await request.json()
 
         // Update prompt
+        const access = await resolveAccess(authResult, request)
+
         const result = await payload.update({
           collection,
+          ...access,
           id,
           data: {
             ...(body.label !== undefined && { label: body.label }),
@@ -190,6 +230,12 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
           headers: { 'Content-Type': 'application/json' },
         })
       } catch (error) {
+        const misconfigured = accessMisconfigurationResponse(error)
+        if (misconfigured) return misconfigured
+
+        const mapped = payloadErrorResponse(error)
+        if (mapped) return mapped
+
         console.error('[AI Prompts] Error updating prompt:', error)
         return new Response(
           JSON.stringify({ error: 'Failed to update prompt' }),
@@ -202,7 +248,7 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
       try {
         // Authenticate
         const authResult = await auth.authenticate(request)
-        if (!authResult.authenticated) {
+        if (!authResult.authenticated || !authResult.user) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },
@@ -217,8 +263,11 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
         const payload = await getPayload({ config: await payloadConfig })
 
         // Delete prompt
+        const access = await resolveAccess(authResult, request)
+
         await payload.delete({
           collection,
+          ...access,
           id,
         })
 
@@ -227,6 +276,12 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
           headers: { 'Content-Type': 'application/json' },
         })
       } catch (error) {
+        const misconfigured = accessMisconfigurationResponse(error)
+        if (misconfigured) return misconfigured
+
+        const mapped = payloadErrorResponse(error)
+        if (mapped) return mapped
+
         console.error('[AI Prompts] Error deleting prompt:', error)
         return new Response(
           JSON.stringify({ error: 'Failed to delete prompt' }),

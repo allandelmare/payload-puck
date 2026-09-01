@@ -84,9 +84,16 @@ export function createIsHomepageUniqueHook(
     // Use locale from context (passed by endpoint handler) or fall back to req.locale
     const locale = context?.locale || req.locale
 
-    // Query for existing homepage (excluding current document)
+    // Query for existing homepage (excluding current document).
+    //
+    // `overrideAccess: true` is deliberate. This hook runs *inside* an operation
+    // whose access Payload already checked, and it enforces a global invariant:
+    // only one page may be the homepage. Evaluating it against the editing user's
+    // read rules would let someone create a second homepage merely because they
+    // cannot see the first — a correctness bug, not a safeguard.
     const existingHomepage = await req.payload.find({
       collection: collectionSlug,
+      overrideAccess: true,
       ...(locale ? { locale: locale.toString() } : {}),
       where: {
         and: [
@@ -127,8 +134,12 @@ export async function unsetHomepage(
   pageId: string,
   locale?: string
 ): Promise<void> {
+  // Deliberate, for the same reason as the uniqueness query above: unsetting the
+  // previous homepage is invariant maintenance on behalf of an already-authorized
+  // edit, not a user-initiated write to that document.
   await payload.update({
     collection: collectionSlug,
+    overrideAccess: true,
     id: pageId,
     data: {
       isHomepage: false,

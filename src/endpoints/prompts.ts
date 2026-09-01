@@ -1,4 +1,13 @@
 import type { PayloadHandler } from 'payload'
+import { payloadErrorStatus } from '../utils/payloadErrors.js'
+
+/**
+ * Access control: every handler passes `overrideAccess: false` and `req` to
+ * Payload's local API, so the collection's own `access` rules and field-level
+ * access are enforced against the calling user. The `if (!req.user)` gate is
+ * authentication only — it is not a substitute for authorization, and relying on
+ * it alone was the bug in GHSA-rrx7-m589-5wfq.
+ */
 
 /**
  * Collection slug for AI prompts
@@ -20,6 +29,8 @@ export function createPromptsListHandler(): PayloadHandler {
     try {
       const result = await req.payload.find({
         collection: COLLECTION,
+        req,
+        overrideAccess: false,
         sort: 'order',
         limit: 100, // Reasonable limit for prompts
       })
@@ -28,7 +39,7 @@ export function createPromptsListHandler(): PayloadHandler {
       console.error('[payload-puck] Error listing prompts:', e)
       return Response.json(
         { error: e instanceof Error ? e.message : 'Failed to list prompts' },
-        { status: 500 }
+        { status: payloadErrorStatus(e) ?? 500 }
       )
     }
   }
@@ -54,6 +65,8 @@ export function createPromptsCreateHandler(): PayloadHandler {
 
       const doc = await req.payload.create({
         collection: COLLECTION,
+        req,
+        overrideAccess: false,
         data,
       })
       return Response.json(doc)
@@ -61,7 +74,7 @@ export function createPromptsCreateHandler(): PayloadHandler {
       console.error('[payload-puck] Error creating prompt:', e)
       return Response.json(
         { error: e instanceof Error ? e.message : 'Failed to create prompt' },
-        { status: 500 }
+        { status: payloadErrorStatus(e) ?? 500 }
       )
     }
   }
@@ -92,6 +105,8 @@ export function createPromptsUpdateHandler(): PayloadHandler {
 
       const doc = await req.payload.update({
         collection: COLLECTION,
+        req,
+        overrideAccess: false,
         id,
         data,
       })
@@ -100,7 +115,7 @@ export function createPromptsUpdateHandler(): PayloadHandler {
       console.error('[payload-puck] Error updating prompt:', e)
       return Response.json(
         { error: e instanceof Error ? e.message : 'Failed to update prompt' },
-        { status: 500 }
+        { status: payloadErrorStatus(e) ?? 500 }
       )
     }
   }
@@ -125,6 +140,8 @@ export function createPromptsDeleteHandler(): PayloadHandler {
     try {
       await req.payload.delete({
         collection: COLLECTION,
+        req,
+        overrideAccess: false,
         id,
       })
       return Response.json({ success: true })
@@ -132,7 +149,7 @@ export function createPromptsDeleteHandler(): PayloadHandler {
       console.error('[payload-puck] Error deleting prompt:', e)
       return Response.json(
         { error: e instanceof Error ? e.message : 'Failed to delete prompt' },
-        { status: 500 }
+        { status: payloadErrorStatus(e) ?? 500 }
       )
     }
   }

@@ -2367,6 +2367,62 @@ payload generate:importmap</code></pre>
         </tbody>
       </table>
       <p>See the JSDoc in <code>@delmaredigital/payload-puck/api</code> for usage examples.</p>
+
+      <h3>Access control</h3>
+
+      <div class="callout callout-warn">
+        <p><strong>Breaking in 0.9.0 &mdash; security fix (<a href="https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-957g-hmmp-rchg">GHSA-957g-hmmp-rchg</a>).</strong> These factories previously called Payload's Local API with the default <code>overrideAccess: true</code>, so <strong>collection and field access rules were never evaluated</strong> on them. Any caller your <code>authenticate</code> hook accepted could read version history and drafts, restore versions, publish, create and delete. They now enforce access control, which requires knowing <em>which Payload user</em> the request acts as.</p>
+      </div>
+
+      <p>The <code>authenticate</code> and <code>canX</code> hooks are authentication plus coarse route gating. They are <strong>not</strong> authorization &mdash; Payload's collection <code>access</code> rules are. Both layers now apply.</p>
+
+      <p>How you satisfy this depends on your auth:</p>
+
+      <h4>Using Payload auth &mdash; nothing to change</h4>
+      <p>If <code>authenticate</code> returns a Payload user (anything from <code>payload.auth()</code>), it is detected automatically and used for access control.</p>
+      <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code>auth: {
+  <span class="hl-func">authenticate</span>: <span class="hl-keyword">async</span> (request) =&gt; {
+    <span class="hl-keyword">const</span> payload = <span class="hl-keyword">await</span> <span class="hl-func">getPayload</span>({ config })
+    <span class="hl-keyword">const</span> { user } = <span class="hl-keyword">await</span> payload.<span class="hl-func">auth</span>({ headers: request.headers })
+    <span class="hl-keyword">if</span> (!user) <span class="hl-keyword">return</span> { authenticated: <span class="hl-keyword">false</span> }
+    <span class="hl-keyword">return</span> { authenticated: <span class="hl-keyword">true</span>, user }
+  },
+}</code></pre>
+
+      <h4>Using external auth &mdash; add <code>toPayloadUser</code></h4>
+      <p>Better Auth, NextAuth, a custom JWT: the session user is not a Payload user, so map it to one. Return <code>null</code> to deliberately act as an anonymous/public request.</p>
+      <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code>auth: {
+  <span class="hl-func">authenticate</span>: <span class="hl-keyword">async</span> (request) =&gt; {
+    <span class="hl-keyword">const</span> session = <span class="hl-keyword">await</span> auth.api.<span class="hl-func">getSession</span>({ headers: request.headers })
+    <span class="hl-keyword">if</span> (!session?.user) <span class="hl-keyword">return</span> { authenticated: <span class="hl-keyword">false</span> }
+    <span class="hl-keyword">return</span> { authenticated: <span class="hl-keyword">true</span>, user: session.user }
+  },
+
+  <span class="hl-comment">// Which Payload user should access control evaluate as?</span>
+  <span class="hl-func">toPayloadUser</span>: <span class="hl-keyword">async</span> (user) =&gt; {
+    <span class="hl-keyword">const</span> payload = <span class="hl-keyword">await</span> <span class="hl-func">getPayload</span>({ config })
+    <span class="hl-keyword">const</span> { docs } = <span class="hl-keyword">await</span> payload.<span class="hl-func">find</span>({
+      collection: <span class="hl-string">'users'</span>,
+      where: { email: { equals: user.email } },
+      limit: <span class="hl-const">1</span>,
+      overrideAccess: <span class="hl-keyword">true</span>, <span class="hl-comment">// the trusted mapping step</span>
+    })
+    <span class="hl-keyword">return</span> docs[<span class="hl-const">0</span>] ?? <span class="hl-keyword">null</span>
+  },
+}</code></pre>
+
+      <p>You can also return the Payload user directly from <code>authenticate</code> as <code>payloadUser</code> if you already looked it up.</p>
+
+      <div class="callout callout-note">
+        <p><strong>Fails closed.</strong> If a route cannot determine the Payload user, it returns <code>500</code> with code <code>PUCK_ACCESS_MISCONFIGURED</code> and performs <strong>no</strong> database operation. The server log carries the exact fix. It will not silently downgrade to an anonymous request, and it will not silently skip authorization.</p>
+      </div>
+
+      <div class="callout callout-note">
+        <p><strong>Denials are now <code>403</code>.</strong> A Payload access denial previously surfaced as <code>500</code>. These routes (and the built-in <code>/api/puck/*</code> endpoints) now return the status Payload intended &mdash; <code>403</code>, <code>404</code>, <code>409</code> &mdash; so client error handling and monitoring can tell a denial from an outage.</p>
+      </div>
+
+      <h4>Emergency opt-out</h4>
+      <p>Setting <code>dangerouslyDisableCollectionAccessControl: true</code> restores the old, vulnerable behaviour and logs a warning once per factory. It exists only as a rollback while you wire up <code>toPayloadUser</code>. With it set, your <code>canX</code> hooks are the <em>only</em> authorization in front of read, create, update, publish, delete and version restore.</p>
     </div>
 
     <!-- EXPORT REFERENCE -->

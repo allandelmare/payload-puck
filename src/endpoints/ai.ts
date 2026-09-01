@@ -26,9 +26,21 @@ async function fetchDynamicContext(req: PayloadRequest): Promise<string | undefi
       return undefined
     }
 
-    // Fetch enabled context entries, sorted by order
+    // Fetch enabled context entries, sorted by order.
+    //
+    // `overrideAccess: true` is deliberate here, and is the one sink in the
+    // request path that keeps it. This is a trusted server-side read that builds
+    // the AI system prompt; it is never returned to the caller as data. The
+    // prompt must be identical for every operator allowed to invoke generation,
+    // otherwise output would silently vary with each user's read permissions on
+    // the context collection. Authorization for *using* AI generation is enforced
+    // by the endpoint's own `req.user` gate, above this call.
+    //
+    // Contrast with endpoints/context.ts, where the same collection is exposed
+    // as user-facing CRUD and is access-controlled (GHSA-rrx7-m589-5wfq).
     const result = await req.payload.find({
       collection: AI_CONTEXT_COLLECTION,
+      overrideAccess: true,
       where: { enabled: { equals: true } },
       sort: 'order',
       limit: 100, // Reasonable limit for context entries
@@ -235,6 +247,10 @@ export function createAiEndpointHandler(options: AiEndpointOptions = {}): Payloa
       if (options.tools && Object.keys(options.tools).length > 0) {
         const toolContext: AiToolContext = {
           payload: req.payload,
+          // Tools read on behalf of the operator, so they must be evaluated
+          // against that user's access rules — otherwise a low-privilege editor
+          // can have the model read documents they cannot, and echo the content
+          // back through generated output.
           user: req.user,
         }
 

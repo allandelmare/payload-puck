@@ -6,6 +6,11 @@ import type {
   RouteHandlerWithIdContext,
 } from './types.js'
 import { resolveLocaleFromNextRequest } from '../utils/locale.js'
+import {
+  createAccessResolver,
+  accessMisconfigurationResponse,
+} from './utils/access.js'
+import { payloadErrorResponse } from '../utils/payloadErrors.js'
 
 /**
  * Create API route handlers for /api/puck/pages/[id]/versions
@@ -41,6 +46,10 @@ export function createPuckApiRoutesVersions(
     auth,
     onError,
   } = routeConfig
+
+  // Resolves { overrideAccess, user } for every Payload call below. Built once
+  // so the opt-out warning is logged per factory, not per request.
+  const resolveAccess = createAccessResolver(routeConfig)
 
   /**
    * GET /api/puck/pages/[id]/versions
@@ -92,9 +101,13 @@ export function createPuckApiRoutesVersions(
       const page = parseInt(url.searchParams.get('page') || '1', 10)
       const locale = resolveLocaleFromNextRequest(request)
 
-      // Fetch versions for this page
+      const access = await resolveAccess(authResult, request)
+
+      // Fetch versions for this page. Access control is evaluated by Payload so
+      // a caller only ever sees versions of documents they may read.
       const versions = await payload.findVersions({
         collection,
+        ...access,
         where: {
           parent: { equals: id },
         },
@@ -118,7 +131,14 @@ export function createPuckApiRoutesVersions(
       if (onError) {
         onError(error, { operation: 'listVersions', request, pageId: params.id })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error fetching versions:', error)
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
+
       return NextResponse.json(
         { error: 'Failed to fetch versions' },
         { status: 500 }
@@ -184,9 +204,13 @@ export function createPuckApiRoutesVersions(
       const config = await payloadConfig
       const payload = await getPayload({ config })
 
-      // Restore the version
+      const access = await resolveAccess(authResult, request)
+
+      // Restore the version. Payload evaluates `update` access on the parent
+      // document, so restoring is gated by the same rules as editing it.
       const restoredDoc = await payload.restoreVersion({
         collection,
+        ...access,
         id: versionId,
       })
 
@@ -196,7 +220,14 @@ export function createPuckApiRoutesVersions(
       if (onError) {
         onError(error, { operation: 'restoreVersion', request, pageId: params.id })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error restoring version:', error)
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
+
       return NextResponse.json(
         { error: 'Failed to restore version' },
         { status: 500 }

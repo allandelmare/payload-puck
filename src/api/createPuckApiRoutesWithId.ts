@@ -7,6 +7,11 @@ import type {
   RouteHandlerWithIdContext,
 } from './types.js'
 import { mapRootPropsToPayloadFields, deepMerge } from './utils/mapRootProps.js'
+import {
+  createAccessResolver,
+  accessMisconfigurationResponse,
+} from './utils/access.js'
+import { payloadErrorResponse } from '../utils/payloadErrors.js'
 
 /**
  * Create API route handlers for /api/puck/pages/[id]
@@ -49,6 +54,10 @@ export function createPuckApiRoutesWithId(
     rootPropsMapping,
     onError,
   } = routeConfig
+
+  // Resolves { overrideAccess, user } for every Payload call below. Built once
+  // so the opt-out warning is logged per factory, not per request.
+  const resolveAccess = createAccessResolver(routeConfig)
 
   /**
    * GET /api/puck/pages/[id]
@@ -99,8 +108,11 @@ export function createPuckApiRoutesWithId(
       const url = new URL(request.url)
       const wantsDraft = url.searchParams.get('draft') !== 'false'
 
+      const access = await resolveAccess(authResult, request)
+
       const page = await payload.findByID({
         collection,
+        ...access,
         id,
         draft: wantsDraft, // Load draft version by default for editing
       })
@@ -115,7 +127,14 @@ export function createPuckApiRoutesWithId(
       if (onError) {
         onError(error, { operation: 'read', request, pageId: params.id })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error fetching page:', error)
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
+
       return NextResponse.json(
         { error: 'Failed to fetch page' },
         { status: 500 }
@@ -198,9 +217,12 @@ export function createPuckApiRoutesWithId(
 
       // Handle homepage swap - if swapHomepage is true and isHomepage is being set,
       // unset the existing homepage first
+      const access = await resolveAccess(authResult, request)
+
       if (swapHomepage && isHomepage === true) {
         const existingHomepage = await payload.find({
           collection,
+          ...access,
           where: {
             and: [
               { isHomepage: { equals: true } },
@@ -214,6 +236,7 @@ export function createPuckApiRoutesWithId(
         if (existingHomepage.docs.length > 0) {
           await payload.update({
             collection,
+            ...access,
             id: existingHomepage.docs[0].id as string,
             data: { isHomepage: false },
             // Pass context to skip the uniqueness hook on this update
@@ -277,8 +300,9 @@ export function createPuckApiRoutesWithId(
         id: string
         data: Record<string, unknown>
         draft?: boolean
-      } = {
+      } & typeof access = {
         collection,
+        ...access,
         id,
         data: updateData,
       }
@@ -298,6 +322,8 @@ export function createPuckApiRoutesWithId(
       if (onError) {
         onError(error, { operation: 'update', request, pageId: params.id })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error updating page:', error)
 
       // Handle Payload validation errors gracefully
@@ -329,6 +355,11 @@ export function createPuckApiRoutesWithId(
           { status: 400 }
         )
       }
+
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
 
       return NextResponse.json(
         { error: 'Failed to update page' },
@@ -381,8 +412,11 @@ export function createPuckApiRoutesWithId(
       const config = await payloadConfig
       const payload = await getPayload({ config })
 
+      const access = await resolveAccess(authResult, request)
+
       await payload.delete({
         collection,
+        ...access,
         id,
       })
 
@@ -392,7 +426,14 @@ export function createPuckApiRoutesWithId(
       if (onError) {
         onError(error, { operation: 'delete', request, pageId: params.id })
       }
+      const misconfigured = accessMisconfigurationResponse(error)
+      if (misconfigured) return misconfigured
       console.error('Error deleting page:', error)
+      // An access denial is a 403, not a server fault. Mapping it keeps the
+      // access-control layer visible to clients and out of error monitoring.
+      const mapped = payloadErrorResponse(error)
+      if (mapped) return mapped
+
       return NextResponse.json(
         { error: 'Failed to delete page' },
         { status: 500 }

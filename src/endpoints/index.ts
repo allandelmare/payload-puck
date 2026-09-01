@@ -12,6 +12,7 @@ import type { PayloadHandler, CollectionSlug } from 'payload'
 import { APIError } from 'payload'
 import { unsetHomepage, HomepageConflictError } from '../plugin/hooks/isHomepageUnique.js'
 import { resolveLocale } from '../utils/locale.js'
+import { payloadErrorStatus } from '../utils/payloadErrors.js'
 import { mapRootPropsToPayloadFields, deepMerge } from '../api/utils/mapRootProps.js'
 import type { RootPropsMapping } from '../api/types.js'
 
@@ -85,7 +86,7 @@ export function createListHandler(options: PuckEndpointOptions): PayloadHandler 
       console.error('[payload-puck] List error:', error)
       return Response.json(
         { error: error instanceof Error ? error.message : 'List failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }
@@ -129,7 +130,7 @@ export function createCreateHandler(options: PuckEndpointOptions): PayloadHandle
       console.error('[payload-puck] Create error:', error)
       return Response.json(
         { error: error instanceof Error ? error.message : 'Create failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }
@@ -171,7 +172,7 @@ export function createGetHandler(options: PuckEndpointOptions): PayloadHandler {
       console.error('[payload-puck] Get error:', error)
       return Response.json(
         { error: error instanceof Error ? error.message : 'Get failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }
@@ -279,7 +280,7 @@ export function createUpdateHandler(options: PuckEndpointOptions): PayloadHandle
 
       return Response.json(
         { error: error instanceof Error ? error.message : 'Update failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }
@@ -316,7 +317,7 @@ export function createDeleteHandler(options: PuckEndpointOptions): PayloadHandle
       console.error('[payload-puck] Delete error:', error)
       return Response.json(
         { error: error instanceof Error ? error.message : 'Delete failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }
@@ -359,7 +360,7 @@ export function createVersionsHandler(options: PuckEndpointOptions): PayloadHand
       console.error('[payload-puck] Versions error:', error)
       return Response.json(
         { error: error instanceof Error ? error.message : 'Versions failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }
@@ -407,7 +408,7 @@ export function createRestoreHandler(options: PuckEndpointOptions): PayloadHandl
       console.error('[payload-puck] Restore error:', error)
       return Response.json(
         { error: error instanceof Error ? error.message : 'Restore failed' },
-        { status: 500 }
+        { status: payloadErrorStatus(error) ?? 500 }
       )
     }
   }

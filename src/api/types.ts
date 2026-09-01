@@ -7,9 +7,31 @@ import type { Data as PuckData } from '@puckeditor/core'
 
 /**
  * Authenticated user from the auth system
+ *
+ * This is deliberately loose: `authenticate` may return a Better Auth session
+ * user, a NextAuth user, a decoded JWT payload, or a Payload user. It is used
+ * for the `canX` route-gating hooks.
+ *
+ * It is **not** what Payload evaluates access control against — see
+ * {@link PayloadUser}.
  */
 export interface AuthenticatedUser {
   id: string
+  [key: string]: unknown
+}
+
+/**
+ * A Payload user document, as Payload's access-control functions expect to
+ * receive it on `req.user`.
+ *
+ * The `collection` property is what distinguishes a real Payload user from an
+ * arbitrary session object — Payload stamps it onto the user during
+ * authentication (`BaseUser` in `payload/auth/types`). Access rules such as
+ * `({ req }) => req.user?.role === 'admin'` are evaluated against this document.
+ */
+export interface PayloadUser {
+  id: string | number
+  collection: string
   [key: string]: unknown
 }
 
@@ -19,6 +41,24 @@ export interface AuthenticatedUser {
 export interface AuthResult {
   authenticated: boolean
   user?: AuthenticatedUser
+
+  /**
+   * The Payload user document this request should act as when Payload evaluates
+   * collection and field access control.
+   *
+   * Set this when `authenticate` already knows the Payload user — it saves the
+   * route factory a second lookup via {@link PuckApiAuthHooks.toPayloadUser}.
+   *
+   * - A user document → access control is evaluated as that user.
+   * - `null` → access control is evaluated as an anonymous/public request.
+   * - Omitted (`undefined`) → the factory falls back to `toPayloadUser`, then to
+   *   `user` if it is structurally a Payload user, and otherwise fails closed.
+   *
+   * If `authenticate` returns a Payload user as `user` (i.e. the result of
+   * `payload.auth()`), you do not need to set this at all.
+   */
+  payloadUser?: PayloadUser | null
+
   error?: string
 }
 
@@ -42,12 +82,37 @@ export interface PermissionResult {
  *
  * @example
  * ```typescript
- * // Example with Better Auth
+ * // Payload's own auth — nothing else to wire up, because `user` already is a
+ * // Payload user document and access control can be evaluated directly.
  * const authHooks: PuckApiAuthHooks = {
  *   authenticate: async (request) => {
- *     const session = await auth.api.getSession({ headers: await headers() })
+ *     const payload = await getPayload({ config })
+ *     const { user } = await payload.auth({ headers: request.headers })
+ *     if (!user) return { authenticated: false }
+ *     return { authenticated: true, user }
+ *   },
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // External auth (Better Auth shown) — `toPayloadUser` is required, otherwise
+ * // the factory cannot tell what the caller may do inside Payload.
+ * const authHooks: PuckApiAuthHooks = {
+ *   authenticate: async (request) => {
+ *     const session = await auth.api.getSession({ headers: request.headers })
  *     if (!session?.user) return { authenticated: false }
  *     return { authenticated: true, user: session.user }
+ *   },
+ *   toPayloadUser: async (user) => {
+ *     const payload = await getPayload({ config })
+ *     const { docs } = await payload.find({
+ *       collection: 'users',
+ *       where: { email: { equals: user.email as string } },
+ *       limit: 1,
+ *       overrideAccess: true,
+ *     })
+ *     return docs[0] ?? null
  *   },
  *   canEdit: async (user, pageId) => {
  *     return { allowed: hasRole(user, 'editor') }
@@ -63,8 +128,44 @@ export interface PuckApiAuthHooks {
   authenticate: (request: NextRequest) => Promise<AuthResult>
 
   /**
+   * Map the authenticated user onto the Payload user document that Payload's
+   * collection and field access rules should be evaluated against.
+   *
+   * Required whenever `authenticate` returns something that is not a Payload
+   * user (a Better Auth session, a NextAuth user, a decoded JWT, ...). Without
+   * it the route factory has no way to know what privileges the caller holds
+   * inside Payload, and fails closed with a 500 rather than guessing.
+   *
+   * Return `null` to deliberately evaluate access control as an anonymous
+   * (public) request.
+   *
+   * @example
+   * ```typescript
+   * toPayloadUser: async (user) => {
+   *   const { docs } = await payload.find({
+   *     collection: 'users',
+   *     where: { email: { equals: user.email as string } },
+   *     limit: 1,
+   *     overrideAccess: true, // this lookup is the trusted mapping step
+   *   })
+   *   return docs[0] ?? null
+   * }
+   * ```
+   */
+  toPayloadUser?: (
+    user: AuthenticatedUser,
+    request: NextRequest
+  ) => Promise<PayloadUser | null> | PayloadUser | null
+
+  /**
    * Check if user can list pages
-   * @default Always allowed for authenticated users
+   *
+   * This is coarse route gating layered *on top of* Payload's collection access
+   * rules, which are always enforced (unless explicitly disabled via
+   * `dangerouslyDisableCollectionAccessControl`). Omitting it does not grant
+   * access Payload itself would deny.
+   *
+   * @default No additional restriction beyond Payload collection access
    */
   canList?: (
     user: AuthenticatedUser
@@ -72,7 +173,7 @@ export interface PuckApiAuthHooks {
 
   /**
    * Check if user can view a specific page
-   * @default Always allowed for authenticated users
+   * @default No additional restriction beyond Payload collection access
    */
   canView?: (
     user: AuthenticatedUser,
@@ -81,7 +182,7 @@ export interface PuckApiAuthHooks {
 
   /**
    * Check if user can create new pages
-   * @default Always allowed for authenticated users
+   * @default No additional restriction beyond Payload collection access
    */
   canCreate?: (
     user: AuthenticatedUser
@@ -89,7 +190,7 @@ export interface PuckApiAuthHooks {
 
   /**
    * Check if user can edit a specific page
-   * @default Always allowed for authenticated users
+   * @default No additional restriction beyond Payload collection access
    */
   canEdit?: (
     user: AuthenticatedUser,
@@ -98,7 +199,7 @@ export interface PuckApiAuthHooks {
 
   /**
    * Check if user can publish a specific page (change status to published)
-   * @default Same as canEdit
+   * @default Falls back to canEdit, then to Payload collection access
    */
   canPublish?: (
     user: AuthenticatedUser,
@@ -107,7 +208,7 @@ export interface PuckApiAuthHooks {
 
   /**
    * Check if user can delete a specific page
-   * @default Always allowed for authenticated users
+   * @default No additional restriction beyond Payload collection access
    */
   canDelete?: (
     user: AuthenticatedUser,
@@ -240,6 +341,24 @@ export interface PuckApiRoutesConfig {
    * Custom error handler for logging/monitoring
    */
   onError?: (error: unknown, context: ErrorContext) => void
+
+  /**
+   * **SECURITY — do not enable without understanding the consequence.**
+   *
+   * Restores the pre-0.9.0 behaviour in which these routes called Payload's
+   * Local API with `overrideAccess: true`, so collection `access` rules and
+   * field-level access are **not** evaluated. Your `canX` hooks become the only
+   * authorization in front of read, create, update, publish, delete and version
+   * restore.
+   *
+   * This was the vulnerability described in GHSA-957g-hmmp-rchg. The only
+   * legitimate reason to set it is an emergency rollback while you wire up
+   * {@link PuckApiAuthHooks.toPayloadUser}. Setting it logs a warning once per
+   * route factory.
+   *
+   * @default false
+   */
+  dangerouslyDisableCollectionAccessControl?: true
 }
 
 // =============================================================================

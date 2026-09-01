@@ -142,7 +142,7 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
           if (!context?.payload) {
             throw new Error('Payload instance not available in tool context')
           }
-          const { payload } = context
+          const { payload, user } = context
 
           const query: {
             collection: string
@@ -168,7 +168,7 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
             }
           }
 
-          const result = await payload.find(query as any)
+          const result = await payload.find({ ...(query as any), overrideAccess: false, user })
           return result.docs
         },
       }
@@ -191,7 +191,7 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
         if (!context?.payload) {
           throw new Error('Payload instance not available in tool context')
         }
-        const { payload } = context
+        const { payload, user } = context
 
         const query: {
           collection: string
@@ -219,7 +219,7 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
           query.where = input.search ? { or: conditions } : { and: conditions }
         }
 
-        const result = await payload.find(query as any)
+        const result = await payload.find({ ...(query as any), overrideAccess: false, user })
         return result.docs.map((doc: any) => ({
           id: doc.id,
           url: doc.url,
@@ -246,7 +246,7 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
         if (!context?.payload) {
           throw new Error('Payload instance not available in tool context')
         }
-        const { payload } = context
+        const { payload, user } = context
 
         const query: {
           collection: string
@@ -263,7 +263,7 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
           }
         }
 
-        const result = await payload.find(query as any)
+        const result = await payload.find({ ...(query as any), overrideAccess: false, user })
         return result.docs.map((doc: any) => ({
           id: doc.id,
           title: doc.title,
@@ -286,9 +286,9 @@ export function createPayloadTools(config: PayloadToolsConfig): Record<string, A
           if (!context?.payload) {
             throw new Error('Payload instance not available in tool context')
           }
-          const { payload } = context
+          const { payload, user } = context
 
-          return await payload.findGlobal({ slug: globalSlug })
+          return await payload.findGlobal({ slug: globalSlug, overrideAccess: false, user })
         },
       }
     }

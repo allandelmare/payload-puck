@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Breaking: the standalone Next.js route factories in `src/api/` now enforce Payload collection access control ([GHSA-957g-hmmp-rchg](https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-957g-hmmp-rchg)).** `createPuckApiRoutes`, `createPuckApiRoutesWithId` and `createPuckApiRoutesVersions` called Payload's Local API with its default `overrideAccess: true` across all eleven sinks, so collection and field `access` rules were never evaluated. CVE-2026-39397 (fixed in 0.6.23) hardened `src/endpoints/index.ts` but left these three files untouched, and the advisory for it wrongly stated they "had their own authentication checks" — they authenticate, which is not authorization.
+
+  Any caller the integrator's `authenticate` hook accepted could read full version history including unpublished drafts, restore arbitrary versions over live content, publish arbitrary content, and — where the optional `canDelete`/`canCreate` hooks were omitted, as the type documentation permitted — create and delete published pages.
+
+  **To upgrade:** the factories now need to know *which Payload user* a request acts as.
+  - **Authenticating with Payload** (`payload.auth()`): nothing to change. A Payload user is detected automatically.
+  - **External auth** (Better Auth, NextAuth, custom JWT): add a `toPayloadUser` hook mapping your session to the Payload user it corresponds to, or return `payloadUser` directly from `authenticate`. Return `null` to deliberately act as an anonymous request.
+
+  Routes **fail closed**: if the Payload user cannot be determined the request returns `500` / `PUCK_ACCESS_MISCONFIGURED` and performs no database operation, with the remediation in the server log. It never silently downgrades to anonymous and never silently skips authorization. `dangerouslyDisableCollectionAccessControl: true` restores the old behaviour as an emergency rollback and warns once per factory.
+
+- **The AI context and prompts endpoints now enforce collection access control ([GHSA-rrx7-m589-5wfq](https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-rrx7-m589-5wfq)).** The eight handlers in `src/endpoints/context.ts` and `src/endpoints/prompts.ts` gated only on `if (!req.user)` and then called the Local API without `req` or `overrideAccess: false`, contradicting the invariant documented at the top of `src/endpoints/index.ts`. Because entries from both collections are concatenated into the AI system prompt, any authenticated user — including one from an unrelated auth-enabled collection, such as a front-end `customers` collection — could tamper with the prompts used by trusted editors, and defeat any hardening a deployer had applied to those collections' `access` rules.
+
+- **Breaking: `createPromptApiRoutes` / `createPromptApiRoutesWithId` now enforce collection access control.** A *fourth* route factory, exported from `@delmaredigital/payload-puck/ai` and named in neither advisory, had the identical defect across all four sinks — with a weaker gate than the others, since it checked only `authResult.authenticated` and never `authResult.user`, and exposes no `canX` hooks at all. It now uses the same resolver, requires a user, and accepts the same `toPayloadUser` / `dangerouslyDisableCollectionAccessControl` configuration. Found by the static guard added in this release, not by either report.
+
+- **AI tools now read as the operator.** The `queryCollection`, `searchMedia`, `findPages` and `get<Global>` tools in `src/ai/tools/index.ts` queried Payload unfiltered, so a low-privilege editor could have the model read documents they cannot access and echo the content back through generated page output. They now pass `overrideAccess: false` and the invoking user. `AiToolContext` already declared `user` and the endpoint already populated it — the tools simply never used it.
+
+- **`src/plugin/hooks/isHomepageUnique.ts` states its posture explicitly.** Its two sinks keep `overrideAccess: true`, which is correct: the hook runs inside an already-authorized operation and enforces a global "only one homepage" invariant. Access-controlling it would let a user create a second homepage merely because they cannot see the first. Previously this rested on Payload's default, making it indistinguishable from the bugs above.
+
+- **`endpoints/ai.ts` marks its one deliberate `overrideAccess: true`.** The read that assembles the AI system prompt is intentionally trusted and unfiltered — the prompt must not vary with each operator's read permissions — but it previously rested on Payload's default, which is indistinguishable from the bug above. It now states its posture explicitly, so every sink in the request path is auditable.
+
+### Fixed
+
+- **Payload access denials are reported as denials.** All request-facing handlers flattened every error into `500`, so a `Forbidden` read the same as a database outage — to clients, to `onError`, and to error monitoring. They now return the status Payload intended (`403`, `404`, `409`), with non-public error messages replaced by generic ones so internal detail is not echoed back. This also affects the built-in `/api/puck/*` endpoints, where the behaviour was latent since 0.6.23.
+- **`createPuckApiRoutes` POST returns `409` on a slug collision it cannot see.** Its uniqueness pre-check now runs under access control (so it can no longer be used to probe for documents the caller may not read), which means a collision with an unreadable document falls through to Payload's unique constraint. That `ValidationError` is mapped back to the same `409` the pre-check would have returned, instead of a generic `500`.
+
+### Added
+
+- **Access-control regression tests** (`tests/api/accessControl.test.ts`, `tests/api/accessControlSources.test.ts`, `tests/endpoints/aiCollectionsAccess.test.ts`) in two independent layers. The behavioural layer drives every handler and asserts each recorded Local API call carries `overrideAccess: false` and the resolved user. The static layer parses every `payload.*` call in `src/api/` and `src/endpoints/` — including indirect calls through a variable — and fails on any sink that does not state its access posture, walking `src/api`, `src/endpoints`, `src/ai` and `src/plugin` so a sink added in a *new* file is caught too. Every sink in `src/` now either enforces access control or documents in a comment why it deliberately does not — there are four of the latter. The static layer is what surfaced the fourth route factory and the AI tool reads. Both layers were verified to fail against the vulnerable code.
+
 ### Changed
 
 - **Dev tooling: `vitest` 3 → 4, `@types/node` 24 → 26, `@swc/cli` 0.6 → 0.8.** Dev-only; the published package is unaffected (declaration output verified byte-identical to the 0.8.3 build).
