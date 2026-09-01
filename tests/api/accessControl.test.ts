@@ -84,6 +84,8 @@ function mockPayload(overrides: Record<string, unknown> = {}) {
     delete: op('delete'),
     findVersions: op('findVersions'),
     restoreVersion: op('restoreVersion'),
+    // Present so a test can prove resolution never re-runs the auth pipeline.
+    auth: vi.fn(async () => ({ user: PAYLOAD_USER, permissions: {} })),
   }
 
   vi.mocked(getPayload).mockResolvedValue(payload as never)
@@ -189,6 +191,104 @@ describe('every Payload Local API call is access-controlled', () => {
 
     const missingUser = calls.filter((c) => c.args.user !== PAYLOAD_USER)
     expect(missingUser.map((c) => c.op)).toEqual([])
+  })
+})
+
+describe('request headers reach Payload access rules', () => {
+  /**
+   * `createLocalReq` substitutes an empty `Headers` when no `req` is passed, so
+   * an access rule that inspects headers — an API-key scope check cannot see its
+   * own key otherwise — would silently misjudge the request. For an API-key
+   * caller that can fail open, so the original headers must be forwarded.
+   */
+  it('forwards the original request headers to every sink', async () => {
+    const { calls } = mockPayload()
+    const request = req('http://localhost/api/puck/pages/p1', {
+      headers: { 'x-api-key': 'secret-key-value' },
+    })
+
+    const handlers = createPuckApiRoutesWithId(baseConfig())
+    await handlers.GET(request, ctx())
+
+    const forwarded = calls[0].args.req as { headers: Headers }
+    expect(forwarded.headers.get('x-api-key')).toBe('secret-key-value')
+  })
+
+  /**
+   * `createLocalReq` MUTATES the req it is handed (assigning locale, context,
+   * payload, user, a dataloader) and returns it. One shared object across the
+   * several sinks in a handler would leak those assignments between operations.
+   */
+  it('gives every sink its own req object', async () => {
+    // A current homepage must exist for the swap branch to add its third sink.
+    const { calls } = mockPayload({ find: { docs: [{ id: 'other' }], totalDocs: 1 } })
+
+    const handlers = createPuckApiRoutesWithId(baseConfig())
+    await handlers.PATCH(
+      jsonReq(
+        { puckData: { root: { props: {} }, content: [], zones: {} }, swapHomepage: true, isHomepage: true },
+        'http://localhost/api/puck/pages/p1'
+      ),
+      ctx()
+    )
+
+    const reqs = calls.map((c) => c.args.req)
+    expect(reqs.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(reqs).size).toBe(reqs.length)
+
+    // Simulating Payload's mutation on one must not affect the others.
+    ;(reqs[0] as Record<string, unknown>).user = { id: 'mutated' }
+    expect((reqs[1] as Record<string, unknown>).user).toBeUndefined()
+  })
+
+  it('carries the same headers on each of those distinct reqs', async () => {
+    const { calls } = mockPayload()
+    const request = jsonReq(
+      { puckData: { root: { props: {} }, content: [], zones: {} }, swapHomepage: true, isHomepage: true },
+      'http://localhost/api/puck/pages/p1'
+    )
+    request.headers.set('x-api-key', 'k')
+
+    const handlers = createPuckApiRoutesWithId(baseConfig())
+    await handlers.PATCH(request, ctx())
+
+    for (const call of calls) {
+      expect((call.args.req as { headers: Headers }).headers.get('x-api-key')).toBe('k')
+    }
+  })
+})
+
+describe('no implicit payload.auth() fallback', () => {
+  /**
+   * Re-running the auth pipeline per request would double-decrement an API key's
+   * remaining quota and rate-limit budget (Better Auth deletes keys on
+   * exhaustion) and could resolve a different principal than the canX hooks
+   * already gated. Resolution must stay pure — never touching payload.
+   */
+  it('never re-runs the auth pipeline while resolving a user', async () => {
+    const { payload } = mockPayload()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const handlers = createPuckApiRoutes(
+      baseConfig({ authenticate: async () => ({ authenticated: true, user: SESSION_USER }) })
+    )
+    const res = await handlers.GET(req(), { params: Promise.resolve({}) })
+
+    expect(res.status).toBe(500)
+    // Obtaining the Payload instance is fine; calling payload.auth() per request
+    // is not — it would consume API-key quota and could resolve a different
+    // principal than the canX hooks already gated.
+    expect(payload.auth).not.toHaveBeenCalled()
+  })
+
+  it('does not call payload.auth() on the happy path either', async () => {
+    const { payload } = mockPayload()
+
+    const handlers = createPuckApiRoutes(baseConfig())
+    const res = await handlers.GET(req(), { params: Promise.resolve({}) })
+
+    expect(res.status).toBe(200)
+    expect(payload.auth).not.toHaveBeenCalled()
   })
 })
 
@@ -337,6 +437,7 @@ describe('dangerouslyDisableCollectionAccessControl', () => {
     expect(res.status).toBe(200)
     expect(calls[0].args.overrideAccess).toBe(true)
     expect(calls[0].args).not.toHaveProperty('user')
+    expect(calls[0].args).not.toHaveProperty('req')
     expect(warn).toHaveBeenCalledOnce()
     expect(String(warn.mock.calls[0][0])).toContain('GHSA-957g-hmmp-rchg')
   })

@@ -11,6 +11,7 @@ import {
   createAccessResolver,
   accessMisconfigurationResponse,
 } from './utils/access.js'
+import type { PayloadAccessArgs } from './utils/access.js'
 import { payloadErrorResponse } from '../utils/payloadErrors.js'
 
 /**
@@ -112,7 +113,7 @@ export function createPuckApiRoutesWithId(
 
       const page = await payload.findByID({
         collection,
-        ...access,
+        ...access(),
         id,
         draft: wantsDraft, // Load draft version by default for editing
       })
@@ -222,7 +223,7 @@ export function createPuckApiRoutesWithId(
       if (swapHomepage && isHomepage === true) {
         const existingHomepage = await payload.find({
           collection,
-          ...access,
+          ...access(),
           where: {
             and: [
               { isHomepage: { equals: true } },
@@ -236,7 +237,7 @@ export function createPuckApiRoutesWithId(
         if (existingHomepage.docs.length > 0) {
           await payload.update({
             collection,
-            ...access,
+            ...access(),
             id: existingHomepage.docs[0].id as string,
             data: { isHomepage: false },
             // Pass context to skip the uniqueness hook on this update
@@ -300,9 +301,9 @@ export function createPuckApiRoutesWithId(
         id: string
         data: Record<string, unknown>
         draft?: boolean
-      } & typeof access = {
+      } & PayloadAccessArgs = {
         collection,
-        ...access,
+        ...access(),
         id,
         data: updateData,
       }
@@ -416,7 +417,7 @@ export function createPuckApiRoutesWithId(
 
       await payload.delete({
         collection,
-        ...access,
+        ...access(),
         id,
       })
 

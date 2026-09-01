@@ -82,8 +82,10 @@ export interface PermissionResult {
  *
  * @example
  * ```typescript
- * // Payload's own auth — nothing else to wire up, because `user` already is a
- * // Payload user document and access control can be evaluated directly.
+ * // The recommended wiring for EVERY auth system, including Better Auth,
+ * // NextAuth and Clerk. `payload.auth()` runs whatever auth strategies your
+ * // Payload config registers and returns a real Payload user — already carrying
+ * // `collection` plus any fields the strategy decorates onto it.
  * const authHooks: PuckApiAuthHooks = {
  *   authenticate: async (request) => {
  *     const payload = await getPayload({ config })
@@ -91,35 +93,18 @@ export interface PermissionResult {
  *     if (!user) return { authenticated: false }
  *     return { authenticated: true, user }
  *   },
+ *   canPublish: async (user) => ({ allowed: user.role === 'admin' }),
  * }
  * ```
  *
- * @example
- * ```typescript
- * // External auth (Better Auth shown) — `toPayloadUser` is required, otherwise
- * // the factory cannot tell what the caller may do inside Payload.
- * const authHooks: PuckApiAuthHooks = {
- *   authenticate: async (request) => {
- *     const session = await auth.api.getSession({ headers: request.headers })
- *     if (!session?.user) return { authenticated: false }
- *     return { authenticated: true, user: session.user }
- *   },
- *   toPayloadUser: async (user) => {
- *     const payload = await getPayload({ config })
- *     const { docs } = await payload.find({
- *       collection: 'users',
- *       where: { email: { equals: user.email as string } },
- *       limit: 1,
- *       overrideAccess: true,
- *     })
- *     return docs[0] ?? null
- *   },
- *   canEdit: async (user, pageId) => {
- *     return { allowed: hasRole(user, 'editor') }
- *   },
- * }
- * ```
- */
+ * Do **not** call your auth library directly and return its session user
+ * (`auth.api.getSession()`, `getServerSession()`, a decoded JWT). Those objects
+ * are not Payload users, and mapping one back by email returns the bare row —
+ * silently dropping the tenant and scope context your access rules read. With
+ * Better Auth that means losing `activeOrganizationId`, `organizationRole`,
+ * `apiKeyScopes` and `oauthScopes`, and an API-key caller can then be judged as
+ * an ordinary session.
+  */
 export interface PuckApiAuthHooks {
   /**
    * Authenticate the incoming request
@@ -128,29 +113,20 @@ export interface PuckApiAuthHooks {
   authenticate: (request: NextRequest) => Promise<AuthResult>
 
   /**
-   * Map the authenticated user onto the Payload user document that Payload's
-   * collection and field access rules should be evaluated against.
+   * Escape hatch for callers that have **no** corresponding Payload user.
    *
-   * Required whenever `authenticate` returns something that is not a Payload
-   * user (a Better Auth session, a NextAuth user, a decoded JWT, ...). Without
-   * it the route factory has no way to know what privileges the caller holds
-   * inside Payload, and fails closed with a 500 rather than guessing.
+   * Prefer building `authenticate` on `payload.auth({ headers })`, which returns
+   * a Payload user directly and needs none of this. Reach for `toPayloadUser`
+   * only when your caller genuinely cannot be resolved that way.
+   *
+   * Whatever you return *is* the principal Payload evaluates access control
+   * against, so it must carry every field your access rules read. Looking the
+   * user up by email and returning the bare collection row is the common
+   * mistake: it drops the fields an auth strategy decorates onto the user, and
+   * access rules that read them will reach the wrong decision.
    *
    * Return `null` to deliberately evaluate access control as an anonymous
    * (public) request.
-   *
-   * @example
-   * ```typescript
-   * toPayloadUser: async (user) => {
-   *   const { docs } = await payload.find({
-   *     collection: 'users',
-   *     where: { email: { equals: user.email as string } },
-   *     limit: 1,
-   *     overrideAccess: true, // this lookup is the trusted mapping step
-   *   })
-   *   return docs[0] ?? null
-   * }
-   * ```
    */
   toPayloadUser?: (
     user: AuthenticatedUser,

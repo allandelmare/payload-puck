@@ -13,9 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Any caller the integrator's `authenticate` hook accepted could read full version history including unpublished drafts, restore arbitrary versions over live content, publish arbitrary content, and — where the optional `canDelete`/`canCreate` hooks were omitted, as the type documentation permitted — create and delete published pages.
 
-  **To upgrade:** the factories now need to know *which Payload user* a request acts as.
-  - **Authenticating with Payload** (`payload.auth()`): nothing to change. A Payload user is detected automatically.
-  - **External auth** (Better Auth, NextAuth, custom JWT): add a `toPayloadUser` hook mapping your session to the Payload user it corresponds to, or return `payloadUser` directly from `authenticate`. Return `null` to deliberately act as an anonymous request.
+  **To upgrade:** build `authenticate` on `payload.auth({ headers: request.headers })`. That runs whatever auth strategies your Payload config registers — Better Auth, Clerk, custom strategies — and returns a real Payload user, which is detected automatically. This is the recommended wiring for *every* auth system, not just Payload's own.
+
+  Do **not** return your auth library's session user (`auth.api.getSession()`, `getServerSession()`, a decoded JWT): those carry no `collection` and the routes now fail closed on them. And do not map one back by email — a bare collection row silently drops the fields an auth strategy decorates onto the user. With `payload-better-auth` that means losing `activeOrganizationId`, `organizationRole`, `apiKeyScopes` and `oauthScopes`, so an API-key caller can be judged as an ordinary session. The `toPayloadUser` hook remains for callers that genuinely have no Payload user; whatever it returns *is* the principal access control evaluates.
 
   Routes **fail closed**: if the Payload user cannot be determined the request returns `500` / `PUCK_ACCESS_MISCONFIGURED` and performs no database operation, with the remediation in the server log. It never silently downgrades to anonymous and never silently skips authorization. `dangerouslyDisableCollectionAccessControl: true` restores the old behaviour as an emergency rollback and warns once per factory.
 
@@ -31,16 +31,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Request headers now reach access rules.** The route factories forward the original request headers into every Payload operation. `createLocalReq` substitutes an empty `Headers` when none is passed, so an access rule that inspects them — an API-key scope check cannot see its own key otherwise — would silently misjudge the request; for an API-key caller that can fail **open**, treating a zero-scope key as a full session. Each operation receives its own request object, because Payload mutates the one it is given and sharing it across the several operations in a handler would leak locale, context and dataloader state between them.
+
 - **Payload access denials are reported as denials.** All request-facing handlers flattened every error into `500`, so a `Forbidden` read the same as a database outage — to clients, to `onError`, and to error monitoring. They now return the status Payload intended (`403`, `404`, `409`), with non-public error messages replaced by generic ones so internal detail is not echoed back. This also affects the built-in `/api/puck/*` endpoints, where the behaviour was latent since 0.6.23.
 - **`createPuckApiRoutes` POST returns `409` on a slug collision it cannot see.** Its uniqueness pre-check now runs under access control (so it can no longer be used to probe for documents the caller may not read), which means a collision with an unreadable document falls through to Payload's unique constraint. That `ValidationError` is mapped back to the same `409` the pre-check would have returned, instead of a generic `500`.
 
 ### Added
 
-- **Access-control regression tests** (`tests/api/accessControl.test.ts`, `tests/api/accessControlSources.test.ts`, `tests/endpoints/aiCollectionsAccess.test.ts`) in two independent layers. The behavioural layer drives every handler and asserts each recorded Local API call carries `overrideAccess: false` and the resolved user. The static layer parses every `payload.*` call in `src/api/` and `src/endpoints/` — including indirect calls through a variable — and fails on any sink that does not state its access posture, walking `src/api`, `src/endpoints`, `src/ai` and `src/plugin` so a sink added in a *new* file is caught too. Every sink in `src/` now either enforces access control or documents in a comment why it deliberately does not — there are four of the latter. The static layer is what surfaced the fourth route factory and the AI tool reads. Both layers were verified to fail against the vulnerable code.
+- **Access-control regression tests** (`tests/api/accessControl.test.ts`, `tests/api/accessControlSources.test.ts`, `tests/endpoints/aiCollectionsAccess.test.ts`) in two independent layers. The behavioural layer drives every handler and asserts each recorded Local API call carries `overrideAccess: false` and the resolved user. The static layer parses every `payload.*` call in `src/api/` and `src/endpoints/` — including indirect calls through a variable — and fails on any sink that does not state its access posture, walking `src/api`, `src/endpoints`, `src/ai` and `src/plugin` so a sink added in a *new* file is caught too. Every sink in `src/` now either enforces access control or documents in a comment why it deliberately does not — there are four of the latter. The static layer is what surfaced the fourth route factory and the AI tool reads. Every guarantee was mutation-tested rather than assumed: removing a single access spread, dropping the forwarded headers, and sharing one request object across sinks each produce failures.
 
 ### Changed
 
 - **Dev tooling: `vitest` 3 → 4, `@types/node` 24 → 26, `@swc/cli` 0.6 → 0.8.** Dev-only; the published package is unaffected (declaration output verified byte-identical to the 0.8.3 build).
+
+### Notes
+
+- **No implicit `payload.auth()` fallback.** An earlier draft resolved unmappable users by re-running Payload's auth pipeline per request. Validation against `payload-better-auth` ruled it out: it double-decrements an API key's remaining quota and rate-limit budget (Better Auth deletes keys on exhaustion), adds a full access-evaluation pass, and can resolve a *different* principal than the one the `canX` hooks already gated — a confused deputy. Resolution stays pure and never touches Payload.
 
 ### Deferred
 

@@ -2378,8 +2378,8 @@ payload generate:importmap</code></pre>
 
       <p>How you satisfy this depends on your auth:</p>
 
-      <h4>Using Payload auth &mdash; nothing to change</h4>
-      <p>If <code>authenticate</code> returns a Payload user (anything from <code>payload.auth()</code>), it is detected automatically and used for access control.</p>
+      <h4>The recommended wiring, for every auth system</h4>
+      <p>Build <code>authenticate</code> on <code>payload.auth()</code>. It runs whatever auth strategies your Payload config registers &mdash; Better Auth, Clerk, custom strategies &mdash; and returns a real Payload user, which is detected automatically. Nothing else to configure.</p>
       <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code>auth: {
   <span class="hl-func">authenticate</span>: <span class="hl-keyword">async</span> (request) =&gt; {
     <span class="hl-keyword">const</span> payload = <span class="hl-keyword">await</span> <span class="hl-func">getPayload</span>({ config })
@@ -2389,32 +2389,26 @@ payload generate:importmap</code></pre>
   },
 }</code></pre>
 
-      <h4>Using external auth &mdash; add <code>toPayloadUser</code></h4>
-      <p>Better Auth, NextAuth, a custom JWT: the session user is not a Payload user, so map it to one. Return <code>null</code> to deliberately act as an anonymous/public request.</p>
-      <pre><span class="lang-tag">ts</span><button class="copy-btn" onclick="copyBlock(this)">Copy</button><code>auth: {
-  <span class="hl-func">authenticate</span>: <span class="hl-keyword">async</span> (request) =&gt; {
-    <span class="hl-keyword">const</span> session = <span class="hl-keyword">await</span> auth.api.<span class="hl-func">getSession</span>({ headers: request.headers })
-    <span class="hl-keyword">if</span> (!session?.user) <span class="hl-keyword">return</span> { authenticated: <span class="hl-keyword">false</span> }
-    <span class="hl-keyword">return</span> { authenticated: <span class="hl-keyword">true</span>, user: session.user }
-  },
+      <div class="callout callout-warn">
+        <p><strong>Do not return your auth library's session user.</strong> <code>auth.api.getSession()</code>, <code>getServerSession()</code>, <code>getServerUser()</code> and decoded JWTs return objects that are <em>not</em> Payload users &mdash; they carry no <code>collection</code>, and these routes now fail closed on them.</p>
+        <p>Mapping one back by email is <strong>worse than the 500</strong>: a bare collection row silently drops the fields your auth strategy decorates onto the user. With <a href="https://github.com/delmaredigital/payload-better-auth">payload-better-auth</a> that means losing <code>activeOrganizationId</code>, <code>organizationRole</code>, <code>apiKeyScopes</code> and <code>oauthScopes</code>, so an API-key caller can be judged as an ordinary session and an org-scoped rule can be evaluated with no organization at all.</p>
+      </div>
 
-  <span class="hl-comment">// Which Payload user should access control evaluate as?</span>
-  <span class="hl-func">toPayloadUser</span>: <span class="hl-keyword">async</span> (user) =&gt; {
-    <span class="hl-keyword">const</span> payload = <span class="hl-keyword">await</span> <span class="hl-func">getPayload</span>({ config })
-    <span class="hl-keyword">const</span> { docs } = <span class="hl-keyword">await</span> payload.<span class="hl-func">find</span>({
-      collection: <span class="hl-string">'users'</span>,
-      where: { email: { equals: user.email } },
-      limit: <span class="hl-const">1</span>,
-      overrideAccess: <span class="hl-keyword">true</span>, <span class="hl-comment">// the trusted mapping step</span>
-    })
-    <span class="hl-keyword">return</span> docs[<span class="hl-const">0</span>] ?? <span class="hl-keyword">null</span>
-  },
-}</code></pre>
+      <div class="callout callout-note">
+        <p><strong>Better Auth users:</strong> wire <code>strategies: [betterAuthStrategy()]</code> on your users collection as usual, then use the <code>payload.auth()</code> recipe above &mdash; that is the whole integration. Note that Better Auth reads API keys from the <code>x-api-key</code> header by default; <code>Authorization: Bearer &lt;api key&gt;</code> is not authenticated unless you have configured <code>apiKeyHeaders</code> or a custom getter.</p>
+      </div>
+
+      <h4>Callers with no Payload user</h4>
+      <p>Only if a caller genuinely has no corresponding Payload user, implement <code>toPayloadUser</code>. Whatever you return <em>is</em> the principal access control evaluates, so it must carry every field your access rules read. Return <code>null</code> to deliberately act as an anonymous request.</p>
 
       <p>You can also return the Payload user directly from <code>authenticate</code> as <code>payloadUser</code> if you already looked it up.</p>
 
       <div class="callout callout-note">
         <p><strong>Fails closed.</strong> If a route cannot determine the Payload user, it returns <code>500</code> with code <code>PUCK_ACCESS_MISCONFIGURED</code> and performs <strong>no</strong> database operation. The server log carries the exact fix. It will not silently downgrade to an anonymous request, and it will not silently skip authorization.</p>
+      </div>
+
+      <div class="callout callout-note">
+        <p><strong>Request headers reach your access rules.</strong> These routes forward the original request headers into every Payload operation, so an access rule that inspects them — an API-key scope check, for instance — sees the same request the REST API would. Each operation gets its own request object.</p>
       </div>
 
       <div class="callout callout-note">

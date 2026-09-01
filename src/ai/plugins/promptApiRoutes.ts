@@ -100,7 +100,7 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
 
         const result = await payload.find({
           collection,
-          ...access,
+          ...access(),
           sort: 'order',
           limit: 100,
         })
@@ -146,7 +146,7 @@ export function createPromptApiRoutes(config: PromptApiRoutesConfig): {
 
         const result = await payload.create({
           collection,
-          ...access,
+          ...access(),
           data: {
             label: body.label,
             prompt: body.prompt,
@@ -215,7 +215,7 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
 
         const result = await payload.update({
           collection,
-          ...access,
+          ...access(),
           id,
           data: {
             ...(body.label !== undefined && { label: body.label }),
@@ -267,7 +267,7 @@ export function createPromptApiRoutesWithId(config: PromptApiRoutesConfig): {
 
         await payload.delete({
           collection,
-          ...access,
+          ...access(),
           id,
         })
 

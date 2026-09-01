@@ -146,7 +146,7 @@ export function createPuckApiRoutes(
       // documents the caller may actually read.
       const result = await payload.find({
         collection,
-        ...access,
+        ...access(),
         page,
         limit,
         sort,
@@ -230,7 +230,7 @@ export function createPuckApiRoutes(
       // ValidationError handler maps it back to the same 409.
       const existing = await payload.find({
         collection,
-        ...access,
+        ...access(),
         where: { slug: { equals: slug } },
         limit: 1,
       })
@@ -257,7 +257,7 @@ export function createPuckApiRoutes(
       // Create the page
       const newPage = await payload.create({
         collection,
-        ...access,
+        ...access(),
         draft: enableDrafts,
         data: {
           title,

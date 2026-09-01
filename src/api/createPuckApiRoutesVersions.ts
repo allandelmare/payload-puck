@@ -107,7 +107,7 @@ export function createPuckApiRoutesVersions(
       // a caller only ever sees versions of documents they may read.
       const versions = await payload.findVersions({
         collection,
-        ...access,
+        ...access(),
         where: {
           parent: { equals: id },
         },
@@ -210,7 +210,7 @@ export function createPuckApiRoutesVersions(
       // document, so restoring is gated by the same rules as editing it.
       const restoredDoc = await payload.restoreVersion({
         collection,
-        ...access,
+        ...access(),
         id: versionId,
       })
 

@@ -40,12 +40,32 @@ export interface AccessResolverConfig {
  * Arguments spread into every Payload Local API call made by the route factories.
  *
  * `user` is intentionally always present (possibly `null`) when access control is
- * on: `null` means "evaluate as an anonymous request", which is a meaningful and
- * deliberate state, not a missing value.
+ * on: `null` means "evaluate as an anonymous request", which is a deliberate
+ * state, not a missing value.
+ *
+ * `req` carries the *original request headers*. Access rules routinely read them
+ * — an API-key scope check cannot see its own key otherwise — and `createLocalReq`
+ * substitutes an empty `Headers` when no `req` is passed, which makes such a rule
+ * silently misjudge the request. For an API-key caller that can fail **open**.
  */
 export type PayloadAccessArgs =
-  | { overrideAccess: false; user: PayloadUser | null }
+  | {
+      overrideAccess: false
+      user: PayloadUser | null
+      req: { headers: Headers }
+    }
   | { overrideAccess: true }
+
+/**
+ * Mints the arguments for one Local API call.
+ *
+ * This is a factory rather than a value on purpose. `createLocalReq` **mutates**
+ * the `req` it is given (assigning `locale`, `context`, `payload`, `user`, a
+ * dataloader) and returns it. Sharing one object across the several sinks in a
+ * handler would let those assignments leak between operations. Each call gets a
+ * fresh object.
+ */
+export type AccessArgsFactory = () => PayloadAccessArgs
 
 /**
  * Thrown when the route factory cannot determine which Payload user to evaluate
@@ -71,35 +91,32 @@ const MISCONFIGURED_MESSAGE = [
   'access control cannot be evaluated. The route factory refuses to run the',
   'operation rather than bypass authorization.',
   '',
-  'Fix this by doing ONE of the following:',
+  'THE FIX, for almost every case: build `authenticate` on `payload.auth()`',
+  'rather than on your auth library directly. It runs whatever auth strategies',
+  'your Payload config registers — Better Auth, Clerk, custom strategies — and',
+  'returns a real Payload user:',
   '',
-  '  1. (Recommended) Authenticate with Payload itself, so `authenticate` returns',
-  '     a real Payload user:',
+  '    authenticate: async (request) => {',
+  '      const payload = await getPayload({ config })',
+  '      const { user } = await payload.auth({ headers: request.headers })',
+  '      if (!user) return { authenticated: false }',
+  '      return { authenticated: true, user }',
+  '    }',
   '',
-  '       authenticate: async (request) => {',
-  '         const payload = await getPayload({ config })',
-  "         const { user } = await payload.auth({ headers: request.headers })",
-  '         if (!user) return { authenticated: false }',
-  '         return { authenticated: true, user }',
-  '       }',
+  'This is the recommended wiring even when your session comes from Better Auth',
+  'or NextAuth. Do NOT look the user up by email and return the bare row: that',
+  'silently drops the fields your auth strategy decorates onto the user (for',
+  'Better Auth: activeOrganizationId, organizationRole, apiKeyScopes,',
+  'oauthScopes), and access rules that read them then reach the wrong decision —',
+  'in the API-key case, potentially a permissive one.',
   '',
-  '  2. Map your external session (Better Auth, NextAuth, a JWT, ...) onto the',
-  '     Payload user it corresponds to:',
+  'Only if your caller genuinely has no corresponding Payload user:',
   '',
-  '       toPayloadUser: async (user) => {',
-  '         const { docs } = await payload.find({',
-  "           collection: 'users',",
-  '           where: { email: { equals: user.email } },',
-  '           limit: 1,',
-  '           overrideAccess: true,',
-  '         })',
-  '         return docs[0] ?? null',
-  '       }',
-  '',
-  '  3. Deliberately act as an anonymous (public) request, if your collection',
-  '     access rules are written for that:',
-  '',
-  '       toPayloadUser: () => null',
+  '  - Return `payloadUser` from `authenticate`, or implement `toPayloadUser`, if',
+  '    you can construct the equivalent Payload user yourself — including every',
+  '    field your access rules read.',
+  '  - Use `toPayloadUser: () => null` to deliberately evaluate access control as',
+  '    an anonymous (public) request.',
   '',
   'As a last resort you may set `dangerouslyDisableCollectionAccessControl: true`',
   'on the route config. That restores the pre-fix behaviour in which Payload',
@@ -113,8 +130,12 @@ const MISCONFIGURED_MESSAGE = [
  * Payload stamps `collection` onto the authenticated user (`BaseUser` in
  * `payload/auth/types`), and nothing else in the auth pipeline does. Combined
  * with an `id`, it is a reliable discriminator between a Payload user and an
- * arbitrary session object, and it is what lets the common case — an integrator
- * who authenticates via `payload.auth()` — work with no extra configuration.
+ * arbitrary session object, and it is what lets the recommended wiring —
+ * `authenticate` built on `payload.auth()` — work with no extra configuration.
+ *
+ * Deliberately *stricter* than Payload itself, which tolerates a missing
+ * `collection` by silently defaulting it. That tolerance is the footgun;
+ * refusing the input is the point.
  */
 export function isPayloadUser(value: unknown): value is PayloadUser {
   if (typeof value !== 'object' || value === null) return false
@@ -137,6 +158,14 @@ export function isPayloadUser(value: unknown): value is PayloadUser {
  *    zero-config path for Payload-auth integrators.
  * 4. Otherwise: throw. We cannot tell whether the session maps to a privileged
  *    user or to nobody, and guessing either way is a security bug.
+ *
+ * There is deliberately **no** automatic `payload.auth()` fallback at step 4.
+ * It would re-run the auth pipeline on every request: for an API-key caller that
+ * double-decrements the key's remaining quota and rate-limit budget (and Better
+ * Auth deletes keys on exhaustion), and it can resolve a *different* principal
+ * than the one the `canX` hooks already gated — a confused deputy. The zero-cost
+ * path is for `authenticate` itself to call `payload.auth()`, which step 3 then
+ * accepts.
  *
  * @throws {PuckApiAccessError} when no branch matches.
  */
@@ -164,9 +193,10 @@ export async function resolvePayloadUser(
 /**
  * Build the access resolver for one route factory.
  *
- * Returns a function that produces the `{ overrideAccess, user }` pair to spread
- * into a Local API call. The returned closure holds the "already warned" flag, so
- * the opt-out warning is emitted once per factory instead of once per request.
+ * Returns a function that resolves the acting user once per request and hands
+ * back an {@link AccessArgsFactory} to mint per-sink arguments. The closure holds
+ * the "already warned" flag, so the opt-out warning is emitted once per factory
+ * rather than once per request.
  */
 export function createAccessResolver(routeConfig: AccessResolverConfig) {
   const { auth, dangerouslyDisableCollectionAccessControl } = routeConfig
@@ -175,7 +205,7 @@ export function createAccessResolver(routeConfig: AccessResolverConfig) {
   return async function resolveAccess(
     authResult: AuthResult,
     request: NextRequest
-  ): Promise<PayloadAccessArgs> {
+  ): Promise<AccessArgsFactory> {
     if (dangerouslyDisableCollectionAccessControl === true) {
       if (!warned) {
         warned = true
@@ -186,11 +216,17 @@ export function createAccessResolver(routeConfig: AccessResolverConfig) {
             'authorization in effect. See GHSA-957g-hmmp-rchg.'
         )
       }
-      return { overrideAccess: true }
+      return () => ({ overrideAccess: true })
     }
 
     const user = await resolvePayloadUser(auth, authResult, request)
-    return { overrideAccess: false, user }
+
+    return () => ({
+      overrideAccess: false,
+      user,
+      // Fresh per call — createLocalReq mutates whatever it is given.
+      req: { headers: request.headers },
+    })
   }
 }
 
