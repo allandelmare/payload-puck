@@ -197,5 +197,22 @@
   "bugs": {
     "url": "https://github.com/delmaredigital/payload-puck/issues"
   },
-  "homepage": "https://delmaredigital.com/developers"
+  "homepage": "https://delmaredigital.com/developers",
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@1": "^1.1.16",
+      "brace-expansion@2": "^2.1.2",
+      "dompurify": "^3.4.13",
+      "fast-uri": "^3.1.5",
+      "happy-dom": "^20.8.9",
+      "immutable": "^4.3.9",
+      "js-yaml@4": "^4.3.1",
+      "linkify-it": "^5.0.2",
+      "markdown-it": "^14.2.0",
+      "nanoid@3": "^3.3.16",
+      "piscina": "^4.9.3",
+      "postcss": "^8.5.23",
+      "ws": "^8.21.0"
+    }
+  }
 }

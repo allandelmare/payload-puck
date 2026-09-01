@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Cleared 45 of 53 Dependabot alerts** via `pnpm.overrides`, pinning 13 transitive packages to their patched versions: `brace-expansion` (both major lines), `dompurify`, `fast-uri`, `happy-dom`, `immutable`, `js-yaml`, `linkify-it`, `markdown-it`, `nanoid`, `piscina`, `postcss` and `ws`. All are same-major bumps with no API surface change. Declaration output verified byte-identical to the 0.9.0 build, so the published package is unaffected.
+
+  **Two remain open, deliberately.** `undici@5.29.0` (7 alerts) and `uuid@3.4.0` (1) arrive through `@puckeditor/plugin-ai` → `ai` → `@ai-sdk/provider-utils`, and → `qler` respectively. `@puckeditor/plugin-ai` is already at its latest published version (`0.8.2`), so there is no bump available to us.
+
+  They are **not** suppressed, for two reasons. `pnpm.overrides` applies only to this workspace, so forcing them would clear the alert here without protecting anyone installing this package — the exposure is real and the alert is accurate. And both would require multi-major jumps (`undici` 5 → 6+, `uuid` 3 → 11+, across a documented API break) that nothing in this repo's test suite exercises, so a green build would be no evidence of safety. These need an upstream fix in `@puckeditor/plugin-ai`'s dependency tree.
+
 ## [0.9.0] - 2026-09-01
 
 ### Security
