@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dev dependencies: `payload`, `@payloadcms/next` and `@payloadcms/ui` 3.87.1 → 3.88.0.** Dev-only; declaration output verified byte-identical, so the published package is unaffected. The peer floor stays `>=3.69.0`.
+
+  Checked explicitly against 3.88.0 because 0.9.0's access control depends on Payload internals: `createLocalReq` still threads the `user` option onto `req.user` (and still silently defaults a missing `collection`), still honours `headers` from a passed `req`, and all seven Local API operations still accept `overrideAccess`, `user` and `req`. This is also the version the GHSA-957g-hmmp-rchg reporter demonstrated against.
+
 ### Security
 
 - **Cleared 45 of 53 Dependabot alerts** via `pnpm.overrides`, pinning 13 transitive packages to their patched versions: `brace-expansion` (both major lines), `dompurify`, `fast-uri`, `happy-dom`, `immutable`, `js-yaml`, `linkify-it`, `markdown-it`, `nanoid`, `piscina`, `postcss` and `ws`. All are same-major bumps with no API surface change. Declaration output verified byte-identical to the 0.9.0 build, so the published package is unaffected.

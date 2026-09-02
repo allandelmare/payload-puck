@@ -160,8 +160,8 @@
     "lucide-react": "^1.30.0"
   },
   "devDependencies": {
-    "@payloadcms/next": "^3.87.1",
-    "@payloadcms/ui": "^3.87.1",
+    "@payloadcms/next": "^3.88.0",
+    "@payloadcms/ui": "^3.88.0",
     "@puckeditor/core": "^0.23.0",
     "@swc/cli": "^0.8.1",
     "@swc/core": "^1.15.47",
@@ -171,7 +171,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "copyfiles": "^2.4.1",
     "next": "^16.3.0",
-    "payload": "^3.87.1",
+    "payload": "^3.88.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript": "^5.9.3",
