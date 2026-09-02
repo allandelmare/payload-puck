@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Runtime dependencies refreshed: the `@tiptap/*` family 3.29.2 → 3.31.0, `lucide-react` 1.30.0 → 1.39.0, `@radix-ui/react-popover` 1.1.15 → 1.1.23.** These change what consumers install, unlike the dev bumps below. Declaration output is byte-identical, so no public type surface moved, and the dependency contract tests pass: every Lucide icon imported across `src/` still resolves, and rendered SVG defaults are unchanged (24×24, `viewBox="0 0 24 24"`, `stroke-width="2"`, `currentColor`, `aria-hidden`). Declared floors were raised to match.
+
 - **Dev dependencies: `payload`, `@payloadcms/next` and `@payloadcms/ui` 3.87.1 → 3.88.0.** Dev-only; declaration output verified byte-identical, so the published package is unaffected. The peer floor stays `>=3.69.0`.
 
   Checked explicitly against 3.88.0 because 0.9.0's access control depends on Payload internals: `createLocalReq` still threads the `user` option onto `req.user` (and still silently defaults a missing `collection`), still honours `headers` from a passed `req`, and all seven Local API operations still accept `overrideAccess`, `user` and `req`. This is also the version the GHSA-957g-hmmp-rchg reporter demonstrated against.
