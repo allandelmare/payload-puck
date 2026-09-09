@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-09-09
+
+### Fixed
+
+- **`collectionOverrides` no longer clobbers the generated pages collection's merged `access`, `admin`, `hooks` and `versions`.** `generatePagesCollection()` merged each of those carefully and then ended with a shallow `...collectionOverrides` spread, so passing `collectionOverrides: { access: { readVersions } }` replaced the entire access object and silently handed `read`/`create`/`update`/`delete` back to Payload's defaults, ignoring whatever you passed via `access`. The same applied to partial `admin` and `versions` overrides (a `versions: { maxPerDoc }` override dropped `drafts: true`). Only keys not merged explicitly are now spread verbatim. Regression tests pin all four.
+
+### Added
+
+- **`access.readVersions`** on the plugin options, so version-history access can be restricted without reaching for `collectionOverrides`. Unset, Payload's default applies as before.
+
 ## [0.9.1] - 2026-09-09
 
 ### Changed

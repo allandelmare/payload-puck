@@ -2282,7 +2282,7 @@ payload generate:importmap</code></pre>
         <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>pagesCollection</code></td><td><code>'pages'</code></td><td>Collection slug to use for pages</td></tr>
-          <tr><td><code>access</code></td><td>read: public; create/update/delete: authenticated</td><td>Access rules for the generated pages collection. Pass role-aware functions to tighten (0.9.1 changed the write default from allow-all)</td></tr>
+          <tr><td><code>access</code></td><td>read: public; create/update/delete: authenticated</td><td>Access rules for the generated pages collection. Pass role-aware functions to tighten (0.9.1 changed the write default from allow-all). Also accepts <code>readVersions</code></td></tr>
           <tr><td><code>autoGenerateCollection</code></td><td><code>true</code></td><td>Create the collection if it doesn't exist, or add Puck fields to existing</td></tr>
           <tr><td><code>enableEndpoints</code></td><td><code>true</code></td><td>Register API endpoints at <code>/api/puck/:collection</code> for the editor</td></tr>
           <tr><td><code>enableAdminView</code></td><td><code>true</code></td><td>Register the Puck editor view in Payload admin</td></tr>

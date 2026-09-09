@@ -36,6 +36,13 @@ export function generatePagesCollection(
     additionalFields = [],
   } = options
 
+  // These keys are merged explicitly in the config below; only the remaining
+  // override keys are spread verbatim.
+  const MERGED_OVERRIDE_KEYS = new Set(['access', 'admin', 'hooks', 'versions', 'fields'])
+  const restOverrides = Object.fromEntries(
+    Object.entries(collectionOverrides).filter(([key]) => !MERGED_OVERRIDE_KEYS.has(key)),
+  ) as Partial<CollectionConfig>
+
   const baseFields: Field[] = [
     // Core Fields (title and slug with duplication hooks - unique to collection generation)
     {
@@ -131,6 +138,7 @@ export function generatePagesCollection(
       create: access.create ?? defaultWriteAccess,
       update: access.update ?? defaultWriteAccess,
       delete: access.delete ?? defaultWriteAccess,
+      ...(access.readVersions ? { readVersions: access.readVersions } : {}),
       ...(collectionOverrides.access ?? {}),
     },
     hooks: {
@@ -157,7 +165,12 @@ export function generatePagesCollection(
         ? { drafts: true, ...collectionOverrides.versions }
         : { drafts: true },
     fields: baseFields,
-    ...collectionOverrides,
+    // Everything merged above (admin, access, hooks, versions, fields) must not
+    // be clobbered by a shallow spread of the overrides: passing
+    // `collectionOverrides: { access: { readVersions } }` used to replace the
+    // whole access object and silently hand read/create/update/delete back to
+    // Payload's defaults.
+    ...restOverrides,
     // Ensure fields aren't overwritten by collectionOverrides
     ...(collectionOverrides.fields && {
       fields: [...baseFields, ...collectionOverrides.fields],
