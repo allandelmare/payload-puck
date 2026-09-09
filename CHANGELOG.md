@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.1] - 2026-09-09
 
 ### Changed
 
@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Checked explicitly against 3.88.0 because 0.9.0's access control depends on Payload internals: `createLocalReq` still threads the `user` option onto `req.user` (and still silently defaults a missing `collection`), still honours `headers` from a passed `req`, and all seven Local API operations still accept `overrideAccess`, `user` and `req`. This is also the version the GHSA-957g-hmmp-rchg reporter demonstrated against.
 
 ### Security
+
+- **The generated pages collection no longer defaults to allow-all write access.** `createPuckPlugin()` filled any `access` function you did not pass with `() => true`, so a consumer who passed no `access` at all (the Quick Start, and the dd-starter template until today) shipped a `pages` collection that **anonymous** REST and GraphQL callers could create, update and delete. The `/api/puck/*` endpoints correctly enforced collection access since 0.6.23, which meant they enforced a rule that allowed everyone.
+
+  `read` still defaults to public so the frontend can render published pages anonymously. `create`, `update` and `delete` now default to `({ req }) => Boolean(req.user)`, matching the `puck-templates` collection. Any `access` function you pass explicitly, and anything in `collectionOverrides.access`, still wins.
+
+  **Action:** none if you already pass `access`. If you relied on the default, review it now: authenticated-but-untrusted users (public sign-up, for example) can still write pages, so pass role-aware functions such as `update: ({ req }) => req.user?.role === 'admin'`.
 
 - **Cleared 45 of 53 Dependabot alerts** via `pnpm.overrides`, pinning 13 transitive packages to their patched versions: `brace-expansion` (both major lines), `dompurify`, `fast-uri`, `happy-dom`, `immutable`, `js-yaml`, `linkify-it`, `markdown-it`, `nanoid`, `piscina`, `postcss` and `ws`. All are same-major bumps with no API surface change. Declaration output verified byte-identical to the 0.9.0 build, so the published package is unaffected.
 

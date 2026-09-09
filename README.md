@@ -10,6 +10,13 @@ A PayloadCMS plugin for integrating [Puck](https://puckeditor.com) visual page b
   <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdelmaredigital%2Fdd-starter&project-name=my-payload-site&build-command=pnpm%20run%20ci&env=PAYLOAD_SECRET,BETTER_AUTH_SECRET&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%2C%7B%22type%22%3A%22blob%22%7D%5D"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="32"></a>
 </p>
 
+> 🔒 **Upgrading to 0.9.1? Security release — the generated pages collection no longer defaults to allow-all writes.**
+>
+> - If you called `createPuckPlugin()` without an `access` option, your `pages` collection let **anonymous** callers create, update and delete through Payload's REST/GraphQL API. `create`, `update` and `delete` now default to any authenticated user; `read` stays public. Anything you pass explicitly still wins.
+> - **Action:** none if you already pass `access`. Otherwise decide who may write pages and say so, e.g. `access: { update: ({ req }) => req.user?.role === 'admin' }`. See the [CHANGELOG](./CHANGELOG.md#091---2026-09-09).
+
+---
+
 > 🔒 **Upgrading to 0.9? Security release — action required if you use the standalone route factories.**
 >
 > - **`createPuckApiRoutes`, `createPuckApiRoutesWithId`, `createPuckApiRoutesVersions` and `createPromptApiRoutes` now enforce Payload collection access control** ([GHSA-957g-hmmp-rchg](https://github.com/delmaredigital/payload-puck/security/advisories/GHSA-957g-hmmp-rchg)). They previously called Payload's Local API with the default `overrideAccess: true`, so collection and field `access` rules were **never evaluated** — any caller your `authenticate` hook accepted could read drafts and version history, restore versions over live content, publish, create and delete.

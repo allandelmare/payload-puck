@@ -13,9 +13,14 @@ import {
 import { createIsHomepageUniqueHook } from '../hooks/isHomepageUnique.js'
 
 /**
- * Default access function - allows all
+ * Default access: anyone may read, only authenticated Payload users may write.
+ *
+ * Before 0.9.1 every operation defaulted to allow-all, so a plugin consumer who
+ * passed no `access` shipped a pages collection that anonymous REST callers
+ * could create, update and delete.
  */
-const defaultAccess: Access = () => true
+const defaultReadAccess: Access = () => true
+const defaultWriteAccess: Access = ({ req }) => Boolean(req.user)
 
 /**
  * Generates a Pages collection configuration for Puck
@@ -122,10 +127,10 @@ export function generatePagesCollection(
       ...(collectionOverrides.admin ?? {}),
     },
     access: {
-      read: access.read ?? defaultAccess,
-      create: access.create ?? defaultAccess,
-      update: access.update ?? defaultAccess,
-      delete: access.delete ?? defaultAccess,
+      read: access.read ?? defaultReadAccess,
+      create: access.create ?? defaultWriteAccess,
+      update: access.update ?? defaultWriteAccess,
+      delete: access.delete ?? defaultWriteAccess,
       ...(collectionOverrides.access ?? {}),
     },
     hooks: {
